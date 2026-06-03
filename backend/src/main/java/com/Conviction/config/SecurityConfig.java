@@ -19,6 +19,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/portfolios/**").permitAll()
                         .requestMatchers("/api/accounts/**").permitAll()
                         .requestMatchers("/api/assets/**").permitAll()
+                        .requestMatchers("/api/transactions/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))
