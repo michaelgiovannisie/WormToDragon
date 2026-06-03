@@ -1,4 +1,4 @@
-package com.Conviction;
+package com.conviction;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
