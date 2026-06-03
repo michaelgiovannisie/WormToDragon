@@ -18,6 +18,7 @@ public class SecurityConfig {
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/api/portfolios/**").permitAll()
                         .requestMatchers("/api/accounts/**").permitAll()
+                        .requestMatchers("/api/assets/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))
