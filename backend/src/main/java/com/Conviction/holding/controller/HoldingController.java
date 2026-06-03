@@ -52,10 +52,10 @@ public class HoldingController {
                 holding.getAsset().getName(),
                 holding.getQuantityHeld(),
                 holding.getTotalCostBasis(),
+                averageCostBasis,
                 holding.getMarketPrice(),
                 holding.getMarketValue(),
                 holding.getUnrealizedGain(),
-                averageCostBasis,
                 holding.getActive(),
                 holding.getLastCalculatedAt()
         );

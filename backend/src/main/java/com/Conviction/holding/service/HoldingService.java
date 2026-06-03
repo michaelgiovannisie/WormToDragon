@@ -54,6 +54,8 @@ public class HoldingService {
                 holding.getTotalCostBasis().add(transactionCost)
         );
 
+        updateMarketAnalytics(holding, transaction.getPricePerUnit());
+
         holding.setActive(true);
 
         holdingRepository.save(holding);
@@ -80,6 +82,8 @@ public class HoldingService {
             holding.setActive(false);
         }
 
+        updateMarketAnalytics(holding, transaction.getPricePerUnit());
+
         holdingRepository.save(holding);
     }
 
@@ -91,5 +95,15 @@ public class HoldingService {
         holding.setTotalCostBasis(BigDecimal.ZERO);
         holding.setActive(true);
         return holding;
+    }
+
+    private void updateMarketAnalytics(Holding holding, BigDecimal marketPrice) {
+        holding.setMarketPrice(marketPrice);
+
+        BigDecimal marketValue = holding.getQuantityHeld().multiply(marketPrice);
+        holding.setMarketValue(marketValue);
+
+        BigDecimal unrealizedGain = marketValue.subtract(holding.getTotalCostBasis());
+        holding.setUnrealizedGain(unrealizedGain);
     }
 }
