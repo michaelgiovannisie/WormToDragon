@@ -10,6 +10,7 @@ import com.conviction.account.entity.Account;
 import com.conviction.account.repository.AccountRepository;
 import com.conviction.asset.entity.Asset;
 import com.conviction.asset.repository.AssetRepository;
+import com.conviction.holding.service.HoldingService;
 import com.conviction.transaction.dto.CreateTransactionRequest;
 import com.conviction.transaction.dto.TransactionResponse;
 import com.conviction.transaction.entity.Transaction;
@@ -21,15 +22,18 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final AssetRepository assetRepository;
+    private final HoldingService holdingService;
 
     public TransactionService(
             TransactionRepository transactionRepository,
             AccountRepository accountRepository,
-            AssetRepository assetRepository
+            AssetRepository assetRepository,
+            HoldingService holdingService
     ) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.assetRepository = assetRepository;
+        this.holdingService = holdingService;
     }
 
     public TransactionResponse createTransaction(CreateTransactionRequest request) {
@@ -50,6 +54,8 @@ public class TransactionService {
         transaction.setNotes(request.notes());
 
         Transaction savedTransaction = transactionRepository.save(transaction);
+
+        holdingService.updateHoldingFromTransaction(savedTransaction);
 
         return toResponse(savedTransaction);
     }
