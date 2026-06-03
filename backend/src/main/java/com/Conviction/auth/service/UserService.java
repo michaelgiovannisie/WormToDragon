@@ -1,11 +1,14 @@
 package com.conviction.auth.service;
 
-import com.conviction.auth.entity.User;
-import com.conviction.auth.repository.UserRepository;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+
+import com.conviction.auth.dto.CreateUserRequest;
+import com.conviction.auth.dto.UserResponse;
+import com.conviction.auth.entity.User;
+import com.conviction.auth.repository.UserRepository;
 
 @Service
 public class UserService {
@@ -16,26 +19,48 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    public User createUser(User user) {
+    public UserResponse createUser(CreateUserRequest request) {
 
-        if (userRepository.existsByEmail(user.getEmail())) {
+        if (userRepository.existsByEmail(request.email())) {
             throw new IllegalArgumentException("Email already exists");
         }
 
-        if (userRepository.existsByUsername(user.getUsername())) {
+        if (userRepository.existsByUsername(request.username())) {
             throw new IllegalArgumentException("Username already exists");
         }
 
-        return userRepository.save(user);
+        User user = new User();
+        user.setEmail(request.email());
+        user.setUsername(request.username());
+        user.setPasswordHash(request.password());
+
+        User savedUser = userRepository.save(user);
+
+        return toResponse(savedUser);
     }
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public User getUserById(UUID id) {
-        return userRepository.findById(id)
+    public UserResponse getUserById(UUID id) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() ->
                         new IllegalArgumentException("User not found"));
+
+        return toResponse(user);
+    }
+
+    private UserResponse toResponse(User user) {
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getUsername(),
+                user.getActive(),
+                user.getCreatedAt()
+        );
     }
 }
