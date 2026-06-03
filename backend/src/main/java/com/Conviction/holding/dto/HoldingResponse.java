@@ -13,6 +13,9 @@ public record HoldingResponse(
         BigDecimal quantityHeld,
         BigDecimal totalCostBasis,
         BigDecimal averageCostBasis,
+        BigDecimal marketPrice,
+        BigDecimal marketValue,
+        BigDecimal unrealizedGain,
         Boolean active,
         LocalDateTime lastCalculatedAt
 ) {

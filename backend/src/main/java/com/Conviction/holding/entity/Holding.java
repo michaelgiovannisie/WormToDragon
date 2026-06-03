@@ -49,6 +49,15 @@ public class Holding {
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal totalCostBasis = BigDecimal.ZERO;
 
+    @Column(precision = 19, scale = 4)
+    private BigDecimal marketPrice = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal marketValue = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal unrealizedGain = BigDecimal.ZERO;
+
     @Column(nullable = false)
     private Boolean active = true;
 

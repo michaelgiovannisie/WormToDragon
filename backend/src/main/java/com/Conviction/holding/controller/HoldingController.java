@@ -34,27 +34,30 @@ public class HoldingController {
 
     private HoldingResponse toResponse(Holding holding) {
 
-    BigDecimal averageCostBasis =
-            holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
-                    ? BigDecimal.ZERO
-                    : holding.getTotalCostBasis()
-                    .divide(
-                            holding.getQuantityHeld(),
-                            2,
-                            RoundingMode.HALF_UP
-                    );
+        BigDecimal averageCostBasis =
+                holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
+                        ? BigDecimal.ZERO
+                        : holding.getTotalCostBasis()
+                        .divide(
+                                holding.getQuantityHeld(),
+                                2,
+                                RoundingMode.HALF_UP
+                        );
 
-    return new HoldingResponse(
-            holding.getId(),
-            holding.getAccount().getId(),
-            holding.getAsset().getId(),
-            holding.getAsset().getSymbol(),
-            holding.getAsset().getName(),
-            holding.getQuantityHeld(),
-            holding.getTotalCostBasis(),
-            averageCostBasis,
-            holding.getActive(),
-            holding.getLastCalculatedAt()
-    );
-}
+        return new HoldingResponse(
+                holding.getId(),
+                holding.getAccount().getId(),
+                holding.getAsset().getId(),
+                holding.getAsset().getSymbol(),
+                holding.getAsset().getName(),
+                holding.getQuantityHeld(),
+                holding.getTotalCostBasis(),
+                holding.getMarketPrice(),
+                holding.getMarketValue(),
+                holding.getUnrealizedGain(),
+                averageCostBasis,
+                holding.getActive(),
+                holding.getLastCalculatedAt()
+        );
+    }
 }
