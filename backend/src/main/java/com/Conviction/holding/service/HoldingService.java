@@ -1,11 +1,17 @@
 package com.conviction.holding.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.conviction.account.entity.Account;
 import com.conviction.asset.entity.Asset;
+import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.transaction.entity.Transaction;
@@ -105,5 +111,59 @@ public class HoldingService {
 
         BigDecimal unrealizedGain = marketValue.subtract(holding.getTotalCostBasis());
         holding.setUnrealizedGain(unrealizedGain);
+    }
+
+    public List<PortfolioHoldingResponse> getHoldingsByPortfolioId(UUID portfolioId) {
+        List<Holding> holdings = holdingRepository.findAll()
+                .stream()
+                .filter(holding -> holding.getAccount()
+                        .getPortfolio()
+                        .getId()
+                        .equals(portfolioId))
+                .filter(Holding::getActive)
+                .toList();
+
+        Map<UUID, List<Holding>> holdingsByAsset = holdings.stream()
+                .collect(Collectors.groupingBy(holding -> holding.getAsset().getId()));
+
+        return holdingsByAsset.values()
+                .stream()
+                .map(this::toPortfolioHoldingResponse)
+                .toList();
+    }
+
+    private PortfolioHoldingResponse toPortfolioHoldingResponse(List<Holding> holdings) {
+        Holding first = holdings.get(0);
+
+        BigDecimal totalQuantity = holdings.stream()
+                .map(Holding::getQuantityHeld)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalCostBasis = holdings.stream()
+                .map(Holding::getTotalCostBasis)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal marketValue = holdings.stream()
+                .map(Holding::getMarketValue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal unrealizedGain = marketValue.subtract(totalCostBasis);
+
+        BigDecimal averageCostBasis =
+                totalQuantity.compareTo(BigDecimal.ZERO) == 0
+                        ? BigDecimal.ZERO
+                        : totalCostBasis.divide(totalQuantity, 2, RoundingMode.HALF_UP);
+
+        return new PortfolioHoldingResponse(
+                first.getAsset().getId(),
+                first.getAsset().getSymbol(),
+                first.getAsset().getName(),
+                totalQuantity,
+                totalCostBasis,
+                averageCostBasis,
+                first.getMarketPrice(),
+                marketValue,
+                unrealizedGain
+        );
     }
 }

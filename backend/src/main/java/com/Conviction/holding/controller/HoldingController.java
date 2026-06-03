@@ -11,17 +11,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.conviction.holding.dto.HoldingResponse;
+import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
+import com.conviction.holding.service.HoldingService;
 
 @RestController
 @RequestMapping("/api/holdings")
 public class HoldingController {
 
     private final HoldingRepository holdingRepository;
+    private final HoldingService holdingService;
 
-    public HoldingController(HoldingRepository holdingRepository) {
+    public HoldingController(
+            HoldingRepository holdingRepository,
+            HoldingService holdingService
+    ) {
         this.holdingRepository = holdingRepository;
+        this.holdingService = holdingService;
     }
 
     @GetMapping("/account/{accountId}")
@@ -30,6 +37,11 @@ public class HoldingController {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @GetMapping("/portfolio/{portfolioId}")
+    public List<PortfolioHoldingResponse> getHoldingsByPortfolioId(@PathVariable UUID portfolioId) {
+        return holdingService.getHoldingsByPortfolioId(portfolioId);
     }
 
     private HoldingResponse toResponse(Holding holding) {
