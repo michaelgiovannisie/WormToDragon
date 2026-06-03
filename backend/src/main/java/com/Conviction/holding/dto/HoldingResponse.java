@@ -12,6 +12,7 @@ public record HoldingResponse(
         String assetName,
         BigDecimal quantityHeld,
         BigDecimal totalCostBasis,
+        BigDecimal averageCostBasis,
         Boolean active,
         LocalDateTime lastCalculatedAt
 ) {

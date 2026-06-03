@@ -1,5 +1,7 @@
 package com.conviction.holding.controller;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,16 +33,28 @@ public class HoldingController {
     }
 
     private HoldingResponse toResponse(Holding holding) {
-        return new HoldingResponse(
-                holding.getId(),
-                holding.getAccount().getId(),
-                holding.getAsset().getId(),
-                holding.getAsset().getSymbol(),
-                holding.getAsset().getName(),
-                holding.getQuantityHeld(),
-                holding.getTotalCostBasis(),
-                holding.getActive(),
-                holding.getLastCalculatedAt()
-        );
-    }
+
+    BigDecimal averageCostBasis =
+            holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
+                    ? BigDecimal.ZERO
+                    : holding.getTotalCostBasis()
+                    .divide(
+                            holding.getQuantityHeld(),
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+
+    return new HoldingResponse(
+            holding.getId(),
+            holding.getAccount().getId(),
+            holding.getAsset().getId(),
+            holding.getAsset().getSymbol(),
+            holding.getAsset().getName(),
+            holding.getQuantityHeld(),
+            holding.getTotalCostBasis(),
+            averageCostBasis,
+            holding.getActive(),
+            holding.getLastCalculatedAt()
+    );
+}
 }
