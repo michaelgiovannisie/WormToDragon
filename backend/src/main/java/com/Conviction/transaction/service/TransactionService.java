@@ -110,6 +110,7 @@ public class TransactionService {
                 transaction.getFees(),
                 transaction.getTransactionDate(),
                 transaction.getNotes(),
+                transaction.getRealizedGain(),
                 transaction.getCreatedAt()
         );
     }

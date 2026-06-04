@@ -60,6 +60,9 @@ public class Transaction {
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal fees = BigDecimal.ZERO;
 
+    @Column(precision = 19, scale = 4)
+    private BigDecimal realizedGain = BigDecimal.ZERO;
+
     @Column(nullable = false)
     private LocalDate transactionDate;
 

@@ -98,6 +98,35 @@ public class HoldingService {
             holding.setActive(false);
         }
 
+        BigDecimal averageCostBasis =
+        holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : holding.getTotalCostBasis()
+                .divide(
+                        holding.getQuantityHeld(),
+                        4,
+                        RoundingMode.HALF_UP
+                );
+
+        BigDecimal realizedGainPerShare =
+        transaction.getPricePerUnit()
+                .subtract(averageCostBasis);
+
+        BigDecimal realizedGain =
+                realizedGainPerShare.multiply(
+                        transaction.getQuantity()
+                );
+
+        transaction.setRealizedGain(realizedGain);
+
+        BigDecimal costBasisReduction =
+                averageCostBasis.multiply(transaction.getQuantity());
+
+        holding.setTotalCostBasis(
+                holding.getTotalCostBasis()
+                        .subtract(costBasisReduction)
+        );
+
         updateMarketAnalytics(holding, transaction.getPricePerUnit());
 
         holdingRepository.save(holding);

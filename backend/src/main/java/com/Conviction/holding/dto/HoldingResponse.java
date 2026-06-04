@@ -16,6 +16,7 @@ public record HoldingResponse(
         BigDecimal marketPrice,
         BigDecimal marketValue,
         BigDecimal unrealizedGain,
+        BigDecimal unrealizedGainPercent,
         Boolean active,
         LocalDateTime lastCalculatedAt
 ) {

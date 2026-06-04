@@ -17,6 +17,7 @@ public record TransactionResponse(
         BigDecimal fees,
         LocalDate transactionDate,
         String notes,
+        BigDecimal realizedGain,
         LocalDateTime createdAt
 ) {
 }
