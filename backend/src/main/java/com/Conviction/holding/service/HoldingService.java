@@ -2,6 +2,7 @@ package com.conviction.holding.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import com.conviction.asset.entity.Asset;
 import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
+import com.conviction.portfolio.dto.PortfolioPerformanceResponse;
 import com.conviction.portfolio.dto.PortfolioSummaryResponse;
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
@@ -267,5 +269,42 @@ public class HoldingService {
                 concentrationRisk,
                 diversificationScore
         );
+    }
+
+    public List<PortfolioPerformanceResponse> getPortfolioPerformance(
+            UUID portfolioId
+    ) {
+
+        List<Transaction> transactions =
+                transactionRepository.findByAccountPortfolioId(portfolioId);
+
+        Map<YearMonth, BigDecimal> monthlyValues =
+                transactions.stream()
+                        .collect(Collectors.groupingBy(
+                                transaction ->
+                                        YearMonth.from(
+                                                transaction.getTransactionDate()
+                                        ),
+                                Collectors.mapping(
+                                        transaction ->
+                                                transaction.getQuantity()
+                                                        .multiply(
+                                                                transaction.getPricePerUnit()
+                                                        ),
+                                        Collectors.reducing(
+                                                BigDecimal.ZERO,
+                                                BigDecimal::add
+                                        )
+                                )
+                        ));
+
+        return monthlyValues.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new PortfolioPerformanceResponse(
+                        entry.getKey().toString(),
+                        entry.getValue()
+                ))
+                .toList();
     }
 }
