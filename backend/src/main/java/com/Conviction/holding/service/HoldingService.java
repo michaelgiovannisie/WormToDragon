@@ -48,6 +48,10 @@ public class HoldingService {
         if (transaction.getTransactionType() == TransactionType.SELL) {
             handleSell(transaction);
         }
+
+        if (transaction.getTransactionType() == TransactionType.DIVIDEND) {
+            handleDividend(transaction);
+        }
     }
 
     private void handleBuy(Transaction transaction) {
@@ -92,30 +96,22 @@ public class HoldingService {
             throw new IllegalArgumentException("Cannot sell more than current holding");
         }
 
-        holding.setQuantityHeld(newQuantity);
-
-        if (newQuantity.compareTo(BigDecimal.ZERO) == 0) {
-            holding.setActive(false);
-        }
-
         BigDecimal averageCostBasis =
-        holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
-                ? BigDecimal.ZERO
-                : holding.getTotalCostBasis()
-                .divide(
-                        holding.getQuantityHeld(),
-                        4,
-                        RoundingMode.HALF_UP
-                );
+                holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
+                        ? BigDecimal.ZERO
+                        : holding.getTotalCostBasis()
+                        .divide(
+                                holding.getQuantityHeld(),
+                                4,
+                                RoundingMode.HALF_UP
+                        );
 
         BigDecimal realizedGainPerShare =
-        transaction.getPricePerUnit()
-                .subtract(averageCostBasis);
+                transaction.getPricePerUnit()
+                        .subtract(averageCostBasis);
 
         BigDecimal realizedGain =
-                realizedGainPerShare.multiply(
-                        transaction.getQuantity()
-                );
+                realizedGainPerShare.multiply(transaction.getQuantity());
 
         transaction.setRealizedGain(realizedGain);
 
@@ -123,9 +119,14 @@ public class HoldingService {
                 averageCostBasis.multiply(transaction.getQuantity());
 
         holding.setTotalCostBasis(
-                holding.getTotalCostBasis()
-                        .subtract(costBasisReduction)
+                holding.getTotalCostBasis().subtract(costBasisReduction)
         );
+
+        holding.setQuantityHeld(newQuantity);
+
+        if (newQuantity.compareTo(BigDecimal.ZERO) == 0) {
+            holding.setActive(false);
+        }
 
         updateMarketAnalytics(holding, transaction.getPricePerUnit());
 
@@ -258,6 +259,12 @@ public class HoldingService {
 
         BigDecimal netCashFlow = totalDeposits.subtract(totalWithdrawals);
 
+        BigDecimal totalDividends = transactionRepository.findByAccountPortfolioId(portfolioId)
+                .stream()
+                .filter(transaction -> transaction.getTransactionType() == TransactionType.DIVIDEND)
+                .map(Transaction::getRealizedGain)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         PortfolioHoldingResponse topHolding =
                 holdings.stream()
                         .max((a, b) ->
@@ -293,6 +300,7 @@ public class HoldingService {
                 totalDeposits,
                 totalWithdrawals,
                 netCashFlow,
+                totalDividends,
                 holdings.size(),
                 topHolding == null ? null : topHolding.symbol(),
                 topAllocation,
@@ -362,5 +370,25 @@ public class HoldingService {
                         entry.getValue()
                 ))
                 .toList();
+    }
+
+    private void handleDividend(Transaction transaction) {
+
+        Account account = transaction.getAccount();
+        Asset asset = transaction.getAsset();
+
+        Holding holding = holdingRepository
+                .findByAccountIdAndAssetId(
+                        account.getId(),
+                        asset.getId()
+                )
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Holding not found"));
+
+        BigDecimal dividendIncome =
+                transaction.getQuantity()
+                        .multiply(transaction.getPricePerUnit());
+
+        transaction.setRealizedGain(dividendIncome);
     }
 }

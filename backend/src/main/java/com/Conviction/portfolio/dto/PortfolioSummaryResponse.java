@@ -12,6 +12,7 @@ public record PortfolioSummaryResponse(
         BigDecimal totalDeposits,
         BigDecimal totalWithdrawals,
         BigDecimal netCashFlow,
+        BigDecimal totalDividends,
         int numberOfHoldings,
         String topHoldingSymbol,
         BigDecimal topHoldingAllocation,

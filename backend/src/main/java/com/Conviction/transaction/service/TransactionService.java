@@ -68,6 +68,13 @@ public class TransactionService {
             throw new IllegalArgumentException("Asset is required for this transaction type");
         }
 
+        if (request.transactionType() == TransactionType.DIVIDEND
+                && request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Dividend quantity must be greater than zero"
+            );
+        }
+
         Asset asset = null;
 
         if (request.assetId() != null) {
