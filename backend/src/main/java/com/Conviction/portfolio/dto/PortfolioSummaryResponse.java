@@ -13,10 +13,13 @@ public record PortfolioSummaryResponse(
         BigDecimal totalWithdrawals,
         BigDecimal netCashFlow,
         BigDecimal totalDividends,
+        BigDecimal totalRealizedGain,
         int numberOfHoldings,
         String topHoldingSymbol,
         BigDecimal topHoldingAllocation,
         String concentrationRisk,
-        BigDecimal diversificationScore
+        BigDecimal diversificationScore,
+        Integer portfolioHealthScore,
+        String portfolioHealthLabel
 ) {
 }

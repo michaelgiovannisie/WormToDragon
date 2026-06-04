@@ -265,6 +265,17 @@ public class HoldingService {
                 .map(Transaction::getRealizedGain)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        BigDecimal totalRealizedGain =
+            transactionRepository
+                    .findByAccountPortfolioId(portfolioId)
+                    .stream()
+                    .map(transaction ->
+                            transaction.getRealizedGain() == null
+                                    ? BigDecimal.ZERO
+                                    : transaction.getRealizedGain()
+                    )
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         PortfolioHoldingResponse topHolding =
                 holdings.stream()
                         .max((a, b) ->
@@ -291,6 +302,35 @@ public class HoldingService {
             BigDecimal.valueOf(100)
                     .subtract(topAllocation);
 
+        BigDecimal rawHealthScore = diversificationScore;
+
+        if (unrealizedGainPercent.compareTo(BigDecimal.ZERO) > 0) {
+            rawHealthScore = rawHealthScore.add(BigDecimal.TEN);
+        }
+
+        if (concentrationRisk.equals("HIGH")) {
+            rawHealthScore = rawHealthScore.subtract(BigDecimal.valueOf(20));
+        } else if (concentrationRisk.equals("MODERATE")) {
+            rawHealthScore = rawHealthScore.subtract(BigDecimal.TEN);
+        }
+
+        int portfolioHealthScore = rawHealthScore
+                .max(BigDecimal.ZERO)
+                .min(BigDecimal.valueOf(100))
+                .intValue();
+
+        String portfolioHealthLabel;
+
+        if (portfolioHealthScore >= 80) {
+            portfolioHealthLabel = "EXCELLENT";
+        } else if (portfolioHealthScore >= 60) {
+            portfolioHealthLabel = "GOOD";
+        } else if (portfolioHealthScore >= 40) {
+            portfolioHealthLabel = "FAIR";
+        } else {
+            portfolioHealthLabel = "WEAK";
+        }
+
         return new PortfolioSummaryResponse(
                 portfolioId,
                 totalMarketValue,
@@ -301,11 +341,14 @@ public class HoldingService {
                 totalWithdrawals,
                 netCashFlow,
                 totalDividends,
+                totalRealizedGain,
                 holdings.size(),
                 topHolding == null ? null : topHolding.symbol(),
                 topAllocation,
                 concentrationRisk,
-                diversificationScore
+                diversificationScore,
+                portfolioHealthScore,
+                portfolioHealthLabel
         );
     }
 
