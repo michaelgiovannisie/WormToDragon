@@ -127,13 +127,20 @@ public class HoldingService {
         Map<UUID, List<Holding>> holdingsByAsset = holdings.stream()
                 .collect(Collectors.groupingBy(holding -> holding.getAsset().getId()));
 
+        BigDecimal totalPortfolioValue = holdings.stream()
+        .map(Holding::getMarketValue)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         return holdingsByAsset.values()
                 .stream()
-                .map(this::toPortfolioHoldingResponse)
+                .map(group -> toPortfolioHoldingResponse(group, totalPortfolioValue))
                 .toList();
     }
 
-    private PortfolioHoldingResponse toPortfolioHoldingResponse(List<Holding> holdings) {
+    private PortfolioHoldingResponse toPortfolioHoldingResponse(
+                List<Holding> holdings,
+                BigDecimal totalPortfolioValue
+        ){
         Holding first = holdings.get(0);
 
         BigDecimal totalQuantity = holdings.stream()
@@ -150,6 +157,13 @@ public class HoldingService {
 
         BigDecimal unrealizedGain = marketValue.subtract(totalCostBasis);
 
+        BigDecimal allocationPercent =
+        totalPortfolioValue.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : marketValue
+                .divide(totalPortfolioValue, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+
         BigDecimal averageCostBasis =
                 totalQuantity.compareTo(BigDecimal.ZERO) == 0
                         ? BigDecimal.ZERO
@@ -164,7 +178,8 @@ public class HoldingService {
                 averageCostBasis,
                 first.getMarketPrice(),
                 marketValue,
-                unrealizedGain
+                unrealizedGain,
+                allocationPercent
         );
     }
 

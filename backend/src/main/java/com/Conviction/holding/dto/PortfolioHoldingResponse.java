@@ -12,6 +12,7 @@ public record PortfolioHoldingResponse(
         BigDecimal averageCostBasis,
         BigDecimal marketPrice,
         BigDecimal marketValue,
-        BigDecimal unrealizedGain
+        BigDecimal unrealizedGain,
+        BigDecimal allocationPercent
 ) {
 }
