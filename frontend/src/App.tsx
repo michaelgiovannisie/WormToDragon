@@ -1,4 +1,15 @@
+import { useEffect, useState } from "react";
+
 function App() {
+  const [summary, setSummary] = useState<any>(null);
+  useEffect(() => {
+    fetch(
+      "http://localhost:8080/api/holdings/portfolio/YOUR_PORTFOLIO_ID/summary"
+    )
+      .then((response) => response.json())
+      .then((data) => setSummary(data))
+      .catch((error) => console.error(error));
+  }, []);
   return (
     <div className="min-h-screen bg-[#0B1020] text-[#F5F1E8]">
       <aside className="fixed left-0 top-0 h-full w-64 border-r border-[#C8A96A]/20 bg-[#080D1A] p-6">
@@ -34,22 +45,22 @@ function App() {
         <section className="grid grid-cols-4 gap-6">
           <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
             <p className="text-sm text-[#A7A08F]">Portfolio Value</p>
-            <h3 className="mt-3 text-3xl font-semibold">$5,805</h3>
+            <h3 className="mt-3 text-3xl font-semibold">{summary?.totalMarketValue ?? "Loading..."}</h3>
           </div>
 
           <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
             <p className="text-sm text-[#A7A08F]">Unrealized Gain</p>
-            <h3 className="mt-3 text-3xl font-semibold">$0</h3>
+            <h3 className="mt-3 text-3xl font-semibold">{summary?.totalUnrealizedGain ?? "Loading..."}</h3>
           </div>
 
           <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
             <p className="text-sm text-[#A7A08F]">Top Holding</p>
-            <h3 className="mt-3 text-3xl font-semibold">AAPL</h3>
+            <h3 className="mt-3 text-3xl font-semibold">{summary?.topHoldingSymbol ?? "Loading..."}</h3>
           </div>
 
           <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
             <p className="text-sm text-[#A7A08F]">Health Score</p>
-            <h3 className="mt-3 text-3xl font-semibold">WEAK</h3>
+            <h3 className="mt-3 text-3xl font-semibold">{summary?.portfolioHealthLabel ?? "Loading..."}</h3>
           </div>
         </section>
       </main>
