@@ -1,6 +1,7 @@
 package com.conviction.transaction.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -112,4 +113,49 @@ public class TransactionService {
                 transaction.getCreatedAt()
         );
     }
+
+    public List<TransactionResponse> getTransactionsByAccountIdAndAssetSymbol(
+            UUID accountId,
+            String symbol
+    ) {
+        return transactionRepository
+                .findByAccountIdAndAssetSymbol(accountId, symbol.toUpperCase())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+    
+    public List<TransactionResponse>
+    getTransactionsByAccountIdAndTypeAndAssetSymbol(
+            UUID accountId,
+            TransactionType transactionType,
+            String symbol
+    ) {
+        return transactionRepository
+                .findByAccountIdAndTransactionTypeAndAssetSymbol(
+                        accountId,
+                        transactionType,
+                        symbol.toUpperCase()
+                )
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<TransactionResponse> getTransactionsByAccountIdAndDateRange(
+            UUID accountId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        return transactionRepository
+                .findByAccountIdAndTransactionDateBetween(
+                        accountId,
+                        startDate,
+                        endDate
+                )
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
 }
