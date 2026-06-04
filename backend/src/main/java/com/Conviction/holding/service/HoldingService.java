@@ -17,15 +17,21 @@ import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.portfolio.dto.PortfolioSummaryResponse;
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
+import com.conviction.transaction.repository.TransactionRepository;
 
 @Service
 public class HoldingService {
 
     private final HoldingRepository holdingRepository;
+    private final TransactionRepository transactionRepository;
 
-    public HoldingService(HoldingRepository holdingRepository) {
-        this.holdingRepository = holdingRepository;
-    }
+    public HoldingService(
+                HoldingRepository holdingRepository,
+                TransactionRepository transactionRepository
+        ) {
+            this.holdingRepository = holdingRepository;
+            this.transactionRepository = transactionRepository;
+        }
 
     public void updateHoldingFromTransaction(Transaction transaction) {
         if (transaction.getAsset() == null) {
@@ -184,7 +190,9 @@ public class HoldingService {
     }
 
     public PortfolioSummaryResponse getPortfolioSummary(UUID portfolioId) {
-        List<PortfolioHoldingResponse> holdings = getHoldingsByPortfolioId(portfolioId);
+
+        List<PortfolioHoldingResponse> holdings =
+                getHoldingsByPortfolioId(portfolioId);
 
         BigDecimal totalMarketValue = holdings.stream()
                 .map(PortfolioHoldingResponse::marketValue)
@@ -194,14 +202,70 @@ public class HoldingService {
                 .map(PortfolioHoldingResponse::totalCostBasis)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal totalUnrealizedGain = totalMarketValue.subtract(totalCostBasis);
+        BigDecimal totalUnrealizedGain =
+                totalMarketValue.subtract(totalCostBasis);
+
+        BigDecimal unrealizedGainPercent =
+            totalCostBasis.compareTo(BigDecimal.ZERO) == 0
+                    ? BigDecimal.ZERO
+                    : totalUnrealizedGain
+                    .divide(totalCostBasis, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+
+        BigDecimal totalDeposits = transactionRepository.findByAccountPortfolioId(portfolioId)
+                .stream()
+                .filter(transaction -> transaction.getTransactionType() == TransactionType.DEPOSIT)
+                .map(transaction -> transaction.getQuantity().multiply(transaction.getPricePerUnit()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalWithdrawals = transactionRepository.findByAccountPortfolioId(portfolioId)
+                .stream()
+                .filter(transaction -> transaction.getTransactionType() == TransactionType.WITHDRAWAL)
+                .map(transaction -> transaction.getQuantity().multiply(transaction.getPricePerUnit()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal netCashFlow = totalDeposits.subtract(totalWithdrawals);
+
+        PortfolioHoldingResponse topHolding =
+                holdings.stream()
+                        .max((a, b) ->
+                                a.allocationPercent()
+                                        .compareTo(b.allocationPercent()))
+                        .orElse(null);
+
+        BigDecimal topAllocation =
+        topHolding == null
+                ? BigDecimal.ZERO
+                : topHolding.allocationPercent();
+
+        String concentrationRisk;
+
+        if (topAllocation.compareTo(BigDecimal.valueOf(40)) > 0) {
+            concentrationRisk = "HIGH";
+        } else if (topAllocation.compareTo(BigDecimal.valueOf(20)) >= 0) {
+            concentrationRisk = "MODERATE";
+        } else {
+            concentrationRisk = "DIVERSIFIED";
+        }
+
+        BigDecimal diversificationScore =
+            BigDecimal.valueOf(100)
+                    .subtract(topAllocation);
 
         return new PortfolioSummaryResponse(
                 portfolioId,
                 totalMarketValue,
                 totalCostBasis,
                 totalUnrealizedGain,
-                holdings.size()
+                unrealizedGainPercent,
+                totalDeposits,
+                totalWithdrawals,
+                netCashFlow,
+                holdings.size(),
+                topHolding == null ? null : topHolding.symbol(),
+                topAllocation,
+                concentrationRisk,
+                diversificationScore
         );
     }
 }

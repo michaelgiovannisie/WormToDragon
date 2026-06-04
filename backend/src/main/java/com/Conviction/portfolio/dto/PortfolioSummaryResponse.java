@@ -8,6 +8,14 @@ public record PortfolioSummaryResponse(
         BigDecimal totalMarketValue,
         BigDecimal totalCostBasis,
         BigDecimal totalUnrealizedGain,
-        int numberOfHoldings
+        BigDecimal unrealizedGainPercent,
+        BigDecimal totalDeposits,
+        BigDecimal totalWithdrawals,
+        BigDecimal netCashFlow,
+        int numberOfHoldings,
+        String topHoldingSymbol,
+        BigDecimal topHoldingAllocation,
+        String concentrationRisk,
+        BigDecimal diversificationScore
 ) {
 }

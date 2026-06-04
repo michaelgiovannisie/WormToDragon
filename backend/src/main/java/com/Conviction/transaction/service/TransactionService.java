@@ -14,6 +14,7 @@ import com.conviction.holding.service.HoldingService;
 import com.conviction.transaction.dto.CreateTransactionRequest;
 import com.conviction.transaction.dto.TransactionResponse;
 import com.conviction.transaction.entity.Transaction;
+import com.conviction.transaction.enums.TransactionType;
 import com.conviction.transaction.repository.TransactionRepository;
 
 @Service
@@ -40,8 +41,38 @@ public class TransactionService {
         Account account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new IllegalArgumentException("Account not found"));
 
-        Asset asset = assetRepository.findById(request.assetId())
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found"));
+        if (request.quantity() == null ||
+                request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero");
+        }
+
+        if (request.pricePerUnit() == null ||
+                request.pricePerUnit().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Price per unit cannot be negative");
+        }
+
+        if (request.fees() != null &&
+                request.fees().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Fees cannot be negative");
+        }
+
+        if (request.transactionDate() == null) {
+            throw new IllegalArgumentException("Transaction date is required");
+        }
+
+        if ((request.transactionType() == TransactionType.BUY ||
+                request.transactionType() == TransactionType.SELL ||
+                request.transactionType() == TransactionType.DIVIDEND)
+                && request.assetId() == null) {
+            throw new IllegalArgumentException("Asset is required for this transaction type");
+        }
+
+        Asset asset = null;
+
+        if (request.assetId() != null) {
+            asset = assetRepository.findById(request.assetId())
+                    .orElseThrow(() -> new IllegalArgumentException("Asset not found"));
+        }
 
         Transaction transaction = new Transaction();
         transaction.setAccount(account);

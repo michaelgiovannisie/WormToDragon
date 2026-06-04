@@ -12,4 +12,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     List<Transaction> findByAccountId(UUID accountId);
 
     List<Transaction> findByAssetId(UUID assetId);
+
+    List<Transaction> findByAccountPortfolioId(UUID portfolioId);
 }
