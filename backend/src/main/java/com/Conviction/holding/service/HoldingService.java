@@ -14,6 +14,7 @@ import com.conviction.asset.entity.Asset;
 import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
+import com.conviction.portfolio.dto.PortfolioSummaryResponse;
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
 
@@ -164,6 +165,28 @@ public class HoldingService {
                 first.getMarketPrice(),
                 marketValue,
                 unrealizedGain
+        );
+    }
+
+    public PortfolioSummaryResponse getPortfolioSummary(UUID portfolioId) {
+        List<PortfolioHoldingResponse> holdings = getHoldingsByPortfolioId(portfolioId);
+
+        BigDecimal totalMarketValue = holdings.stream()
+                .map(PortfolioHoldingResponse::marketValue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalCostBasis = holdings.stream()
+                .map(PortfolioHoldingResponse::totalCostBasis)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalUnrealizedGain = totalMarketValue.subtract(totalCostBasis);
+
+        return new PortfolioSummaryResponse(
+                portfolioId,
+                totalMarketValue,
+                totalCostBasis,
+                totalUnrealizedGain,
+                holdings.size()
         );
     }
 }
