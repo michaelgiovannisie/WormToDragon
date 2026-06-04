@@ -15,6 +15,7 @@ import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.holding.service.HoldingService;
+import com.conviction.portfolio.dto.CashFlowTimelineResponse;
 import com.conviction.portfolio.dto.PortfolioPerformanceResponse;
 import com.conviction.portfolio.dto.PortfolioSummaryResponse;
 
@@ -56,6 +57,13 @@ public class HoldingController {
             @PathVariable UUID portfolioId
     ) {
         return holdingService.getPortfolioPerformance(portfolioId);
+    }
+
+    @GetMapping("/portfolio/{portfolioId}/cash-flow")
+    public List<CashFlowTimelineResponse> getCashFlowTimeline(
+            @PathVariable UUID portfolioId
+    ) {
+        return holdingService.getCashFlowTimeline(portfolioId);
     }
 
     private HoldingResponse toResponse(Holding holding) {

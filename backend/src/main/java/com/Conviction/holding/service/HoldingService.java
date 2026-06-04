@@ -15,6 +15,7 @@ import com.conviction.asset.entity.Asset;
 import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
+import com.conviction.portfolio.dto.CashFlowTimelineResponse;
 import com.conviction.portfolio.dto.PortfolioPerformanceResponse;
 import com.conviction.portfolio.dto.PortfolioSummaryResponse;
 import com.conviction.transaction.entity.Transaction;
@@ -302,6 +303,32 @@ public class HoldingService {
                 .stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> new PortfolioPerformanceResponse(
+                        entry.getKey().toString(),
+                        entry.getValue()
+                ))
+                .toList();
+    }
+
+    public List<CashFlowTimelineResponse> getCashFlowTimeline(UUID portfolioId) {
+
+        List<Transaction> transactions =
+                transactionRepository.findByAccountPortfolioId(portfolioId);
+
+        Map<YearMonth, BigDecimal> monthlyCashFlows =
+                transactions.stream()
+                        .collect(Collectors.groupingBy(
+                                transaction -> YearMonth.from(transaction.getTransactionDate()),
+                                Collectors.mapping(
+                                        transaction -> transaction.getQuantity()
+                                                .multiply(transaction.getPricePerUnit()),
+                                        Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
+                                )
+                        ));
+
+        return monthlyCashFlows.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new CashFlowTimelineResponse(
                         entry.getKey().toString(),
                         entry.getValue()
                 ))
