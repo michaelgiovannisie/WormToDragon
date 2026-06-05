@@ -1,14 +1,15 @@
 package com.conviction.imports.service;
 
 import com.conviction.imports.dto.ImportPreviewResponse;
+import com.conviction.imports.dto.ImportedTransactionRow;
 import com.conviction.imports.dto.RobinhoodCsvRow;
 import com.conviction.imports.mapper.RobinhoodTransactionMapper;
-import com.conviction.imports.dto.ImportedTransactionRow;
 import com.conviction.imports.parser.RobinhoodCsvParser;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class RobinhoodImportService {
@@ -24,24 +25,21 @@ public class RobinhoodImportService {
         this.mapper = mapper;
     }
 
-    public ImportPreviewResponse importCsv(MultipartFile file) {
+    public ImportPreviewResponse importCsv(
+            UUID portfolioId,
+            UUID accountId,
+            MultipartFile file
+    ) {
         List<RobinhoodCsvRow> rows = parser.parse(file);
 
         List<String> columns = rows.isEmpty()
                 ? List.of()
-                : rows.get(0)
-                        .values()
-                        .keySet()
-                        .stream()
-                        .toList();
+                : rows.get(0).values().keySet().stream().toList();
 
         List<ImportedTransactionRow> importedRows = rows.stream()
                 .map(mapper::map)
                 .toList();
 
-        return new ImportPreviewResponse(
-                importedRows.size(),
-                columns
-        );
+        return new ImportPreviewResponse(importedRows.size(), columns);
     }
 }

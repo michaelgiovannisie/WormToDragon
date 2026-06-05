@@ -1,11 +1,12 @@
 package com.conviction.imports.controller;
 
+import com.conviction.imports.dto.ImportPreviewResponse;
+import com.conviction.imports.service.RobinhoodImportService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.conviction.imports.dto.ImportPreviewResponse;
-import com.conviction.imports.service.RobinhoodImportService;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/imports")
@@ -13,17 +14,19 @@ public class ImportController {
 
     private final RobinhoodImportService importService;
 
-    public ImportController(
-            RobinhoodImportService importService
-    ) {
+    public ImportController(RobinhoodImportService importService) {
         this.importService = importService;
     }
 
     @PostMapping("/robinhood")
     public ResponseEntity<ImportPreviewResponse> importRobinhood(
+            @RequestParam("portfolioId") UUID portfolioId,
+            @RequestParam("accountId") UUID accountId,
             @RequestParam("file") MultipartFile file
     ) {
-        ImportPreviewResponse response = importService.importCsv(file);
+        ImportPreviewResponse response =
+                importService.importCsv(portfolioId, accountId, file);
+
         return ResponseEntity.ok(response);
     }
 }
