@@ -1,5 +1,6 @@
 package com.conviction.transaction.repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -39,4 +40,13 @@ public interface TransactionRepository
             LocalDate startDate,
             LocalDate endDate
     );
+
+    boolean existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndTransactionDate(
+                UUID accountId,
+                UUID assetId,
+                TransactionType transactionType,
+                BigDecimal quantity,
+                BigDecimal pricePerUnit,
+                LocalDate transactionDate
+        );
 }

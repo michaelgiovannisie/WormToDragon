@@ -17,6 +17,7 @@ import com.conviction.imports.dto.RobinhoodCsvRow;
 import com.conviction.imports.mapper.RobinhoodTransactionMapper;
 import com.conviction.imports.parser.RobinhoodCsvParser;
 import com.conviction.transaction.dto.CreateTransactionRequest;
+import com.conviction.transaction.repository.TransactionRepository;
 import com.conviction.transaction.service.TransactionService;
 
 @Service
@@ -27,20 +28,23 @@ public class RobinhoodImportService {
     private final AccountRepository accountRepository;
     private final AssetRepository assetRepository;
     private final TransactionService transactionService;
+    private final TransactionRepository transactionRepository;
 
     public RobinhoodImportService(
-            RobinhoodCsvParser parser,
-            RobinhoodTransactionMapper mapper,
-            AccountRepository accountRepository,
-            AssetRepository assetRepository,
-            TransactionService transactionService
-    ) {
+                RobinhoodCsvParser parser,
+                RobinhoodTransactionMapper mapper,
+                AccountRepository accountRepository,
+                AssetRepository assetRepository,
+                TransactionService transactionService,
+                TransactionRepository transactionRepository
+        ) {
         this.parser = parser;
         this.mapper = mapper;
         this.accountRepository = accountRepository;
         this.assetRepository = assetRepository;
         this.transactionService = transactionService;
-    }
+        this.transactionRepository = transactionRepository;
+        }
 
         public ImportResultResponse importCsv(
                 UUID portfolioId,
@@ -78,6 +82,21 @@ public class RobinhoodImportService {
 
                 asset = assetRepository.save(newAsset);
                 assetsCreated++;
+        }
+
+        boolean duplicate =
+                transactionRepository.existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndTransactionDate(
+                        account.getId(),
+                        asset.getId(),
+                        row.transactionType(),
+                        row.quantity(),
+                        row.pricePerUnit(),
+                        row.transactionDate()
+                );
+
+        if (duplicate) {
+        transactionsSkipped++;
+        continue;
         }
 
             CreateTransactionRequest request = new CreateTransactionRequest(
