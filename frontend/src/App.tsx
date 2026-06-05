@@ -1,67 +1,214 @@
-import { useEffect, useState } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid
+} from "recharts";
+
+const portfolioData = [
+  { month: "Jan", value: 3200 },
+  { month: "Feb", value: 3500 },
+  { month: "Mar", value: 4100 },
+  { month: "Apr", value: 4500 },
+  { month: "May", value: 5200 },
+  { month: "Jun", value: 5805 }
+];
 
 function App() {
-  const [summary, setSummary] = useState<any>(null);
-  useEffect(() => {
-    fetch(
-      "http://localhost:8080/api/holdings/portfolio/YOUR_PORTFOLIO_ID/summary"
-    )
-      .then((response) => response.json())
-      .then((data) => setSummary(data))
-      .catch((error) => console.error(error));
-  }, []);
   return (
-    <div className="min-h-screen bg-[#0B1020] text-[#F5F1E8]">
-      <aside className="fixed left-0 top-0 h-full w-64 border-r border-[#C8A96A]/20 bg-[#080D1A] p-6">
-        <h1 className="font-serif text-3xl tracking-wide text-[#C8A96A]">
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0B1020",
+        color: "#F5F1E8",
+        fontFamily: "Georgia, serif"
+      }}
+    >
+      <aside
+        style={{
+          position: "fixed",
+          left: 0,
+          top: 0,
+          width: "260px",
+          height: "100vh",
+          background: "#070B16",
+          borderRight: "1px solid rgba(200,169,106,0.25)",
+          padding: "32px",
+          boxSizing: "border-box"
+        }}
+      >
+        <h1
+          style={{
+            color: "#C8A96A",
+            fontSize: "32px"
+          }}
+        >
           Conviction
         </h1>
-        <p className="mt-2 text-sm text-[#A7A08F]">
+
+        <p style={{ color: "#9C927D" }}>
           Investment Intelligence
         </p>
-
-        <nav className="mt-10 space-y-4 text-sm">
-          <a className="block text-[#F5F1E8]" href="#">Dashboard</a>
-          <a className="block text-[#A7A08F]" href="#">Portfolio</a>
-          <a className="block text-[#A7A08F]" href="#">Transactions</a>
-          <a className="block text-[#A7A08F]" href="#">Research</a>
-          <a className="block text-[#A7A08F]" href="#">Settings</a>
-        </nav>
       </aside>
 
-      <main className="ml-64 p-10">
-        <div className="mb-10">
-          <p className="text-sm uppercase tracking-[0.3em] text-[#C8A96A]">
-            Portfolio Dashboard
-          </p>
-          <h2 className="mt-3 font-serif text-5xl">
-            Long-Term Compounders
-          </h2>
-          <p className="mt-3 text-[#A7A08F]">
-            A refined view of capital, conviction, and performance.
-          </p>
-        </div>
+      <main
+        style={{
+          marginLeft: "260px",
+          padding: "48px"
+        }}
+      >
+        <p
+          style={{
+            color: "#C8A96A",
+            letterSpacing: "0.3em",
+            fontSize: "12px",
+            textTransform: "uppercase"
+          }}
+        >
+          Portfolio Dashboard
+        </p>
 
-        <section className="grid grid-cols-4 gap-6">
-          <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
-            <p className="text-sm text-[#A7A08F]">Portfolio Value</p>
-            <h3 className="mt-3 text-3xl font-semibold">{summary?.totalMarketValue ?? "Loading..."}</h3>
+        <h2
+          style={{
+            fontSize: "56px",
+            marginTop: "16px"
+          }}
+        >
+          Long-Term Compounders
+        </h2>
+
+        <p
+          style={{
+            color: "#9C927D",
+            marginTop: "12px"
+          }}
+        >
+          A refined view of capital, conviction, and performance.
+        </p>
+
+        {/* Cards */}
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "24px",
+            marginTop: "48px"
+          }}
+        >
+          {[
+            ["Portfolio Value", "$5,805"],
+            ["Unrealized Gain", "$597"],
+            ["Top Holding", "AAPL"],
+            ["Health Score", "STRONG"]
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                background: "#11182A",
+                border: "1px solid rgba(200,169,106,0.25)",
+                borderRadius: "20px",
+                padding: "28px"
+              }}
+            >
+              <p
+                style={{
+                  color: "#9C927D",
+                  fontSize: "14px"
+                }}
+              >
+                {label}
+              </p>
+
+              <h3
+                style={{
+                  fontSize: "30px",
+                  marginTop: "16px"
+                }}
+              >
+                {value}
+              </h3>
+            </div>
+          ))}
+        </section>
+
+        {/* Chart */}
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px",
+            minHeight: "420px"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: "24px"
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  color: "#C8A96A",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  fontSize: "12px"
+                }}
+              >
+                Portfolio Trend
+              </p>
+
+              <h3
+                style={{
+                  fontSize: "28px",
+                  marginTop: "8px"
+                }}
+              >
+                Portfolio Value
+              </h3>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
-            <p className="text-sm text-[#A7A08F]">Unrealized Gain</p>
-            <h3 className="mt-3 text-3xl font-semibold">{summary?.totalUnrealizedGain ?? "Loading..."}</h3>
-          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart data={portfolioData}>
+              <CartesianGrid
+                stroke="rgba(200,169,106,0.08)"
+                vertical={false}
+              />
 
-          <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
-            <p className="text-sm text-[#A7A08F]">Top Holding</p>
-            <h3 className="mt-3 text-3xl font-semibold">{summary?.topHoldingSymbol ?? "Loading..."}</h3>
-          </div>
+              <XAxis
+                dataKey="month"
+                stroke="#9C927D"
+              />
 
-          <div className="rounded-2xl border border-[#C8A96A]/20 bg-[#11182A] p-6">
-            <p className="text-sm text-[#A7A08F]">Health Score</p>
-            <h3 className="mt-3 text-3xl font-semibold">{summary?.portfolioHealthLabel ?? "Loading..."}</h3>
-          </div>
+              <YAxis
+                stroke="#9C927D"
+              />
+
+              <Tooltip
+                contentStyle={{
+                  background: "#11182A",
+                  border: "1px solid rgba(200,169,106,0.25)",
+                  borderRadius: "12px",
+                  color: "#F5F1E8"
+                }}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#C8A96A"
+                strokeWidth={4}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </section>
       </main>
     </div>
