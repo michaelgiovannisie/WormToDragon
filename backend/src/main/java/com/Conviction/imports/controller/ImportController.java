@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.conviction.imports.dto.ImportPreviewResponse;
 import com.conviction.imports.service.RobinhoodImportService;
 
 @RestController
@@ -19,15 +20,10 @@ public class ImportController {
     }
 
     @PostMapping("/robinhood")
-    public ResponseEntity<String> importRobinhood(
-            @RequestParam("file")
-            MultipartFile file
+    public ResponseEntity<ImportPreviewResponse> importRobinhood(
+            @RequestParam("file") MultipartFile file
     ) {
-
-        importService.importCsv(file);
-
-        return ResponseEntity.ok(
-                "Robinhood CSV imported successfully"
-        );
+        ImportPreviewResponse response = importService.importCsv(file);
+        return ResponseEntity.ok(response);
     }
 }
