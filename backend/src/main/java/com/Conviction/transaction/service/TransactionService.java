@@ -113,6 +113,8 @@ public class TransactionService {
                 transaction.getId(),
                 transaction.getAccount().getId(),
                 transaction.getAsset() == null ? null : transaction.getAsset().getId(),
+                transaction.getAsset() == null ? null : transaction.getAsset().getSymbol(),
+                transaction.getAsset() == null ? null : transaction.getAsset().getName(),
                 transaction.getTransactionType(),
                 transaction.getQuantity(),
                 transaction.getPricePerUnit(),

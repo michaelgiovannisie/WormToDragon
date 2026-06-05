@@ -28,6 +28,7 @@ function App() {
   const [summary, setSummary] = useState<any>(null);
   const [holdings, setHoldings] = useState<any[]>([]);
   const [performance, setPerformance] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     fetch(
@@ -52,6 +53,13 @@ function App() {
     )
       .then((response) => response.json())
       .then((data) => setPerformance(data))
+      .catch(console.error);
+
+    fetch(
+      `http://localhost:8080/api/transactions/account/${ACCOUNT_ID}`
+    )
+      .then((response) => response.json())
+      .then((data) => setTransactions(data))
       .catch(console.error);
 
   }, []);
@@ -255,6 +263,122 @@ function App() {
               />
             </LineChart>
           </ResponsiveContainer>
+        </section>
+
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            Holdings
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Current Positions
+          </h3>
+
+          <table
+            style={{
+              width: "100%",
+              marginTop: "28px",
+              borderCollapse: "collapse"
+            }}
+          >
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Avg Cost</th>
+                <th>Market Value</th>
+                <th>Unrealized Gain</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {holdings.map((holding) => (
+                <tr
+                  key={holding.id}
+                  style={{
+                    borderTop: "1px solid rgba(200,169,106,0.15)"
+                  }}
+                >
+                  <td style={{ padding: "18px 0", color: "#F5F1E8" }}>
+                    {holding.symbol}
+                  </td>
+                  <td>{holding.quantityHeld}</td>
+                  <td>${Number(holding.averageCostBasis).toFixed(2)}</td>
+                  <td>${Number(holding.marketValue).toFixed(2)}</td>
+                  <td>${Number(holding.unrealizedGain).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p style={{
+            color: "#C8A96A",
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            fontSize: "12px"
+          }}>
+            Ledger
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Recent Transactions
+          </h3>
+
+          <table style={{ width: "100%", marginTop: "28px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Asset</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Realized Gain</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {[...transactions]
+                .sort(
+                  (a, b) =>
+                    new Date(b.transactionDate).getTime() -
+                    new Date(a.transactionDate).getTime()
+                )
+                .map((transaction) => (
+                <tr key={transaction.id} style={{ borderTop: "1px solid rgba(200,169,106,0.15)" }}>
+                  <td style={{ padding: "18px 0" }}>{transaction.transactionDate}</td>
+                  <td>{transaction.transactionType}</td>
+                  <td>{transaction.assetId}</td>
+                  <td>{transaction.quantity}</td>
+                  <td>${Number(transaction.pricePerUnit).toFixed(2)}</td>
+                  <td>${Number(transaction.realizedGain).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       </main>
     </div>

@@ -11,6 +11,8 @@ public record TransactionResponse(
         UUID id,
         UUID accountId,
         UUID assetId,
+        String symbol,
+        String assetName,
         TransactionType transactionType,
         BigDecimal quantity,
         BigDecimal pricePerUnit,
