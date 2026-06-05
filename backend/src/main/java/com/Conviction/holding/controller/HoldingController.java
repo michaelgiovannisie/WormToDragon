@@ -78,16 +78,21 @@ public class HoldingController {
                                 RoundingMode.HALF_UP
                         );
 
+        BigDecimal unrealizedGain =
+        holding.getUnrealizedGain() == null
+                ? BigDecimal.ZERO
+                : holding.getUnrealizedGain();
+
         BigDecimal unrealizedGainPercent =
-            holding.getTotalCostBasis().compareTo(BigDecimal.ZERO) == 0
-                    ? BigDecimal.ZERO
-                    : holding.getUnrealizedGain()
-                    .divide(
-                            holding.getTotalCostBasis(),
-                            4,
-                            RoundingMode.HALF_UP
-                    )
-                    .multiply(BigDecimal.valueOf(100));
+                holding.getTotalCostBasis().compareTo(BigDecimal.ZERO) == 0
+                        ? BigDecimal.ZERO
+                        : unrealizedGain
+                        .divide(
+                                holding.getTotalCostBasis(),
+                                4,
+                                RoundingMode.HALF_UP
+                        )
+                        .multiply(BigDecimal.valueOf(100));
 
         return new HoldingResponse(
                 holding.getId(),
@@ -98,9 +103,9 @@ public class HoldingController {
                 holding.getQuantityHeld(),
                 holding.getTotalCostBasis(),
                 averageCostBasis,
-                holding.getMarketPrice(),
-                holding.getMarketValue(),
-                holding.getUnrealizedGain(),
+                holding.getMarketPrice() == null ? BigDecimal.ZERO : holding.getMarketPrice(),
+                holding.getMarketValue() == null ? BigDecimal.ZERO : holding.getMarketValue(),
+                unrealizedGain,
                 unrealizedGainPercent,
                 holding.getActive(),
                 holding.getLastCalculatedAt()
