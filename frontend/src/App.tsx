@@ -195,7 +195,15 @@ function App() {
           ))}
         </section>
 
-        {/* Chart */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr",
+            gap: "24px",
+            marginTop: "48px"
+          }}
+        >
+
         <section
           style={{
             marginTop: "48px",
@@ -269,122 +277,7 @@ function App() {
           </ResponsiveContainer>
         </section>
 
-        <section
-          style={{
-            marginTop: "48px",
-            background: "#11182A",
-            border: "1px solid rgba(200,169,106,0.25)",
-            borderRadius: "24px",
-            padding: "32px"
-          }}
-        >
-          <p
-            style={{
-              color: "#C8A96A",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              fontSize: "12px"
-            }}
-          >
-            Holdings
-          </p>
-
-          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
-            Current Positions
-          </h3>
-
-          <table
-            style={{
-              width: "100%",
-              marginTop: "28px",
-              borderCollapse: "collapse"
-            }}
-          >
-            <thead>
-              <tr style={{ color: "#9C927D", textAlign: "left" }}>
-                <th>Symbol</th>
-                <th>Shares</th>
-                <th>Avg Cost</th>
-                <th>Market Value</th>
-                <th>Unrealized Gain</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {holdings.map((holding) => (
-                <tr
-                  key={holding.id}
-                  style={{
-                    borderTop: "1px solid rgba(200,169,106,0.15)"
-                  }}
-                >
-                  <td style={{ padding: "18px 0", color: "#F5F1E8" }}>
-                    {holding.symbol}
-                  </td>
-                  <td>{holding.quantityHeld}</td>
-                  <td>${Number(holding.averageCostBasis).toFixed(2)}</td>
-                  <td>${Number(holding.marketValue).toFixed(2)}</td>
-                  <td>${Number(holding.unrealizedGain).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-        <section
-          style={{
-            marginTop: "48px",
-            background: "#11182A",
-            border: "1px solid rgba(200,169,106,0.25)",
-            borderRadius: "24px",
-            padding: "32px"
-          }}
-        >
-          <p style={{
-            color: "#C8A96A",
-            letterSpacing: "0.15em",
-            textTransform: "uppercase",
-            fontSize: "12px"
-          }}>
-            Ledger
-          </p>
-
-          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
-            Recent Transactions
-          </h3>
-
-          <table style={{ width: "100%", marginTop: "28px", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ color: "#9C927D", textAlign: "left" }}>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Asset</th>
-                <th>Quantity</th>
-                <th>Price</th>
-                <th>Realized Gain</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {[...transactions]
-                .sort(
-                  (a, b) =>
-                    new Date(b.transactionDate).getTime() -
-                    new Date(a.transactionDate).getTime()
-                )
-                .map((transaction) => (
-                <tr key={transaction.id} style={{ borderTop: "1px solid rgba(200,169,106,0.15)" }}>
-                  <td style={{ padding: "18px 0" }}>{transaction.transactionDate}</td>
-                  <td>{transaction.transactionType}</td>
-                  <td>{transaction.symbol}</td>
-                  <td>{transaction.quantity}</td>
-                  <td>${Number(transaction.pricePerUnit).toFixed(2)}</td>
-                  <td>${Number(transaction.realizedGain).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-        <section
+                <section
           style={{
             marginTop: "48px",
             background: "#11182A",
@@ -441,6 +334,164 @@ function App() {
               <Legend />
             </PieChart>
           </ResponsiveContainer>
+        </section>
+        </div>
+
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            Holdings
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Current Positions
+          </h3>
+
+          <table
+            style={{
+              width: "100%",
+              marginTop: "28px",
+              borderCollapse: "collapse"
+            }}
+          >
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Avg Cost</th>
+                <th>Market Value</th>
+                <th>Unrealized Gain</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {holdings.map((holding) => (
+                <tr
+                  key={holding.id}
+                  style={{
+                    borderTop: "1px solid rgba(200,169,106,0.15)"
+                  }}
+                >
+                  <td style={{ padding: "18px 0", color: "#F5F1E8" }}>
+                    {holding.symbol}
+                  </td>
+                  <td>{holding.quantityHeld}</td>
+                  <td>${Number(holding.averageCostBasis).toFixed(2)}</td>
+                  <td>${Number(holding.marketValue).toFixed(2)}</td>
+                  <td
+                  style={{
+                    color:
+                      Number(holding.unrealizedGain) < 0
+                        ? "#8FD694"
+                        : "#E06C75"
+                  }}
+                >
+                  ${Number(holding.unrealizedGain).toFixed(2)}
+                </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p style={{
+            color: "#C8A96A",
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            fontSize: "12px"
+          }}>
+            Ledger
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Recent Transactions
+          </h3>
+
+          <table style={{ width: "100%", marginTop: "28px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Asset</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Realized Gain</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {[...transactions]
+                .sort(
+                  (a, b) =>
+                    new Date(b.transactionDate).getTime() -
+                    new Date(a.transactionDate).getTime()
+                )
+                .map((transaction) => (
+                <tr key={transaction.id} style={{ borderTop: "1px solid rgba(200,169,106,0.15)" }}>
+                  <td style={{ padding: "18px 0" }}>{transaction.transactionDate}</td>
+                  <td>
+                    <span
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "999px",
+                        fontSize: "12px",
+                        letterSpacing: "0.08em",
+                        background:
+                          transaction.transactionType === "BUY"
+                            ? "rgba(127,176,105,0.15)"
+                            : transaction.transactionType === "SELL"
+                            ? "rgba(201,112,100,0.15)"
+                            : "rgba(200,169,106,0.15)",
+                        color:
+                          transaction.transactionType === "BUY"
+                            ? "#8FD694"
+                            : transaction.transactionType === "SELL"
+                            ? "#E06C75"
+                            : "#C8A96A"
+                      }}
+                    >
+                      {transaction.transactionType}
+                    </span>
+                  </td>
+                  <td>{transaction.symbol}</td>
+                  <td>{transaction.quantity}</td>
+                  <td>${Number(transaction.pricePerUnit).toFixed(2)}</td>
+                  <td
+                  style={{
+                    color:
+                      Number(transaction.realizedGain) >= 0
+                        ? "#7FB069"
+                        : "#C97064"
+                  }}
+                >
+                  ${Number(transaction.realizedGain).toFixed(2)}
+                </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       </main>
     </div>

@@ -18,6 +18,8 @@ public interface HoldingRepository extends JpaRepository<Holding, UUID> {
 
     List<Holding> findByAccountIdAndActiveTrue(UUID accountId);
 
+    List<Holding> findByAssetSymbol(String symbol);
+
     @Query("""
             SELECT h
             FROM Holding h
