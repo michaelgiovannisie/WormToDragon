@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
   CartesianGrid
 } from "recharts";
+import { useEffect, useState } from "react";
 
 const portfolioData = [
   { month: "Jan", value: 3200 },
@@ -17,7 +18,31 @@ const portfolioData = [
   { month: "Jun", value: 5805 }
 ];
 
+const PORTFOLIO_ID =
+  "a32e04b9-9270-45d2-a16f-34b6389dc464";
+
+const ACCOUNT_ID =
+  "f5afd398-4c6d-4fa7-8493-5031bc7d27ec";
+
 function App() {
+  const [summary, setSummary] = useState<any>(null);
+  const [holdings, setHoldings] = useState<any[]>([]);
+
+  useEffect(() => {
+  fetch(
+    `http://localhost:8080/api/holdings/portfolio/${PORTFOLIO_ID}/summary`
+  )
+    .then((response) => response.json())
+    .then((data) => setSummary(data))
+    .catch(console.error);
+
+  fetch(
+    `http://localhost:8080/api/holdings/account/${ACCOUNT_ID}`
+  )
+    .then((response) => response.json())
+    .then((data) => setHoldings(data))
+    .catch(console.error);
+}, []);
   return (
     <div
       style={{
@@ -99,10 +124,24 @@ function App() {
           }}
         >
           {[
-            ["Portfolio Value", "$5,805"],
-            ["Unrealized Gain", "$597"],
-            ["Top Holding", "AAPL"],
-            ["Health Score", "STRONG"]
+            [
+              "Portfolio Value",
+              `$${summary?.portfolioValue?.toFixed?.(2) ?? "0"}`
+            ],
+            [
+              "Unrealized Gain",
+              `$${summary?.unrealizedGain?.toFixed?.(2) ?? "0"}`
+            ],
+            [
+              "Top Holding",
+              holdings[0]?.symbol ?? "-"
+            ],
+            [
+              "Health Score",
+              summary?.unrealizedGain > 0
+                ? "STRONG"
+                : "WEAK"
+            ]
           ].map(([label, value]) => (
             <div
               key={label}
