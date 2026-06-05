@@ -5,7 +5,11 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from "recharts";
 import { useEffect, useState } from "react";
 
@@ -379,6 +383,64 @@ function App() {
               ))}
             </tbody>
           </table>
+        </section>
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px",
+            minHeight: "420px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            Allocation
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Portfolio Allocation
+          </h3>
+
+          <ResponsiveContainer width="100%" height={320}>
+            <PieChart>
+              <Pie
+                data={holdings}
+                dataKey="marketValue"
+                nameKey="symbol"
+                cx="50%"
+                cy="50%"
+                innerRadius={80}
+                outerRadius={120}
+                paddingAngle={3}
+              >
+                {holdings.map((_, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={index % 2 === 0 ? "#C8A96A" : "#F5F1E8"}
+                  />
+                ))}
+              </Pie>
+
+              <Tooltip
+                contentStyle={{
+                  background: "#11182A",
+                  border: "1px solid rgba(200,169,106,0.25)",
+                  borderRadius: "12px",
+                  color: "#F5F1E8"
+                }}
+              />
+
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
         </section>
       </main>
     </div>
