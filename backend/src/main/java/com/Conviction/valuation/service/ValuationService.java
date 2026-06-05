@@ -21,6 +21,10 @@ public class ValuationService {
         this.scenarioRepository = scenarioRepository;
     }
 
+    public List<ValuationScenario> getScenarios(String symbol) {
+        return scenarioRepository.findBySymbolOrderByCreatedAtDesc(symbol);
+    }
+
     public ValuationResponse calculateIntrinsicValue(
             ValuationRequest request
     ) {
