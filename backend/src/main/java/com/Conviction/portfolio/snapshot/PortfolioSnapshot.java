@@ -28,7 +28,10 @@ import lombok.Setter;
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_portfolio_snapshot_date",
-                        columnNames = {"portfolio_id", "snapshot_date"}
+                        columnNames = {
+                                "portfolio_id",
+                                "snapshot_date"
+                        }
                 )
         }
 )
