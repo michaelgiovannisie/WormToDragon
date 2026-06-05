@@ -36,7 +36,7 @@ public class HoldingController {
 
     @GetMapping("/account/{accountId}")
     public List<HoldingResponse> getHoldingsByAccountId(@PathVariable UUID accountId) {
-        return holdingRepository.findByAccountId(accountId)
+        return holdingRepository.findByAccountIdWithAssetAndAccount(accountId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
