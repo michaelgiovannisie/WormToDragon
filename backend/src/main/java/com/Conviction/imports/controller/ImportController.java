@@ -7,7 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.conviction.imports.service.RobinhoodImportService;
 
 @RestController
-@RequestMapping("/api/import")
+@RequestMapping("/api/imports")
 public class ImportController {
 
     private final RobinhoodImportService importService;
