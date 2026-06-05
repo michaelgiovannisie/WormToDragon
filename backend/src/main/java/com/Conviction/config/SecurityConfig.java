@@ -13,6 +13,9 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .anyRequest().permitAll()
+                )
+                .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health").permitAll()
                         .requestMatchers("/api/users/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
