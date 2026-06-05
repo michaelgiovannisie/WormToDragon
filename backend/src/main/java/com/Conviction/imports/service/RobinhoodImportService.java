@@ -35,6 +35,10 @@ public class RobinhoodImportService {
                         .stream()
                         .toList();
 
+        List<ImportedTransactionRow> importedRows = rows.stream()
+                .map(mapper::map)
+                .toList();
+
         return new ImportPreviewResponse(
                 importedRows.size(),
                 columns
