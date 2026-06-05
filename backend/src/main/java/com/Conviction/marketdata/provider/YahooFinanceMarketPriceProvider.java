@@ -3,11 +3,9 @@ package com.conviction.marketdata.provider;
 import java.math.BigDecimal;
 import java.util.Map;
 
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-@Primary
 @Component
 public class YahooFinanceMarketPriceProvider implements MarketPriceProvider {
 
