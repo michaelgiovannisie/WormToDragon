@@ -371,7 +371,7 @@ function App() {
                 <tr key={transaction.id} style={{ borderTop: "1px solid rgba(200,169,106,0.15)" }}>
                   <td style={{ padding: "18px 0" }}>{transaction.transactionDate}</td>
                   <td>{transaction.transactionType}</td>
-                  <td>{transaction.assetId}</td>
+                  <td>{transaction.symbol}</td>
                   <td>{transaction.quantity}</td>
                   <td>${Number(transaction.pricePerUnit).toFixed(2)}</td>
                   <td>${Number(transaction.realizedGain).toFixed(2)}</td>
