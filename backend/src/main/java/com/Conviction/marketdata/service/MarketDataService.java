@@ -12,6 +12,7 @@ import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.marketdata.dto.UpdateMarketPriceRequest;
 import com.conviction.marketdata.dto.UpdateMarketPriceResponse;
+import com.conviction.marketdata.provider.MarketPriceProvider;
 import com.conviction.portfolio.snapshot.service.PortfolioSnapshotService;
 
 @Service
@@ -19,13 +20,16 @@ public class MarketDataService {
 
     private final HoldingRepository holdingRepository;
     private final PortfolioSnapshotService snapshotService;
+    private final MarketPriceProvider marketPriceProvider;
 
     public MarketDataService(
             HoldingRepository holdingRepository,
-            PortfolioSnapshotService snapshotService
+            PortfolioSnapshotService snapshotService,
+            MarketPriceProvider marketPriceProvider
     ) {
         this.holdingRepository = holdingRepository;
         this.snapshotService = snapshotService;
+        this.marketPriceProvider = marketPriceProvider;
     }
 
     public UpdateMarketPriceResponse updateManualPrice(
@@ -60,6 +64,17 @@ public class MarketDataService {
                 request.symbol(),
                 request.marketPrice(),
                 holdings.size()
+        );
+    }
+
+    public UpdateMarketPriceResponse refreshPrice(String symbol) {
+        BigDecimal latestPrice = marketPriceProvider.getLatestPrice(symbol);
+
+        return updateManualPrice(
+                new UpdateMarketPriceRequest(
+                        symbol,
+                        latestPrice
+                )
         );
     }
 }
