@@ -374,6 +374,67 @@ function App() {
               fontSize: "12px"
             }}
           >
+            Valuation Lab
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Margin of Safety
+          </h3>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "24px",
+              marginTop: "28px"
+            }}
+          >
+            {[
+              [
+                "Intrinsic Value",
+                `$${Number(valuation?.intrinsicValue ?? 0).toFixed(2)}`
+              ],
+              [
+                "Margin of Safety",
+                `${Number(valuation?.marginOfSafetyPercent ?? 0).toFixed(2)}%`
+              ],
+              [
+                "Valuation",
+                valuation?.valuationLabel ?? "-"
+              ]
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                style={{
+                  border: "1px solid rgba(200,169,106,0.18)",
+                  borderRadius: "18px",
+                  padding: "24px"
+                }}
+              >
+                <p style={{ color: "#9C927D", fontSize: "14px" }}>{label}</p>
+                <h4 style={{ fontSize: "26px", marginTop: "12px" }}>{value}</h4>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
             Holdings
           </p>
 

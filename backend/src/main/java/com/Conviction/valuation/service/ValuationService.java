@@ -7,9 +7,19 @@ import org.springframework.stereotype.Service;
 
 import com.conviction.valuation.dto.ValuationRequest;
 import com.conviction.valuation.dto.ValuationResponse;
+import com.conviction.valuation.entity.ValuationScenario;
+import com.conviction.valuation.repository.ValuationScenarioRepository;
 
 @Service
 public class ValuationService {
+
+    private final ValuationScenarioRepository scenarioRepository;
+
+    public ValuationService(
+            ValuationScenarioRepository scenarioRepository
+    ) {
+        this.scenarioRepository = scenarioRepository;
+    }
 
     public ValuationResponse calculateIntrinsicValue(
             ValuationRequest request
@@ -50,6 +60,21 @@ public class ValuationService {
         } else {
             valuationLabel = "OVERVALUED";
         }
+
+        ValuationScenario scenario = new ValuationScenario();
+
+        scenario.setSymbol(request.symbol());
+        scenario.setCurrentPrice(request.currentPrice());
+        scenario.setEarningsPerShare(request.earningsPerShare());
+        scenario.setGrowthRatePercent(request.growthRatePercent());
+        scenario.setDiscountRatePercent(request.discountRatePercent());
+        scenario.setYears(request.years());
+        scenario.setTerminalMultiple(request.terminalMultiple());
+        scenario.setIntrinsicValue(intrinsicValue);
+        scenario.setMarginOfSafetyPercent(marginOfSafetyPercent);
+        scenario.setValuationLabel(valuationLabel);
+
+        scenarioRepository.save(scenario);
 
         return new ValuationResponse(
                 request.symbol(),
