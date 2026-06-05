@@ -2,7 +2,6 @@ package com.conviction.portfolio.snapshot.repository;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +13,7 @@ public interface PortfolioSnapshotRepository
 
     List<PortfolioSnapshot> findByPortfolioIdOrderBySnapshotDateAsc(UUID portfolioId);
 
-    Optional<PortfolioSnapshot> findByPortfolioIdAndSnapshotDate(
+    List<PortfolioSnapshot> findByPortfolioIdAndSnapshotDateOrderByCreatedAtDesc(
             UUID portfolioId,
             LocalDate snapshotDate
     );

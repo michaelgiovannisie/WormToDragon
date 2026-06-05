@@ -33,12 +33,14 @@ public class PortfolioSnapshotService {
                 holdingService.getPortfolioSummary(portfolioId);
 
         PortfolioSnapshot snapshot =
-                snapshotRepository
-                        .findByPortfolioIdAndSnapshotDate(
-                                portfolioId,
-                                LocalDate.now()
-                        )
-                        .orElseGet(PortfolioSnapshot::new);
+        snapshotRepository
+                .findByPortfolioIdAndSnapshotDateOrderByCreatedAtDesc(
+                        portfolioId,
+                        LocalDate.now()
+                )
+                .stream()
+                .findFirst()
+                .orElseGet(PortfolioSnapshot::new);
 
         snapshot.setPortfolioId(portfolioId);
         snapshot.setSnapshotDate(LocalDate.now());
