@@ -19,6 +19,17 @@ public interface HoldingRepository extends JpaRepository<Holding, UUID> {
     List<Holding> findByAccountIdAndActiveTrue(UUID accountId);
 
     @Query("""
+            SELECT h
+            FROM Holding h
+            JOIN FETCH h.asset
+            JOIN FETCH h.account
+            WHERE h.account.id = :accountId
+            """)
+    List<Holding> findByAccountIdWithAssetAndAccount(
+            @Param("accountId") UUID accountId
+    );
+
+    @Query("""
         SELECT h
         FROM Holding h
         JOIN FETCH h.asset

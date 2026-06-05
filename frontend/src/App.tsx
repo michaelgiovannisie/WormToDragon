@@ -29,20 +29,23 @@ function App() {
   const [holdings, setHoldings] = useState<any[]>([]);
 
   useEffect(() => {
-  fetch(
-    `http://localhost:8080/api/holdings/portfolio/${PORTFOLIO_ID}/summary`
-  )
-    .then((response) => response.json())
-    .then((data) => setSummary(data))
-    .catch(console.error);
+    fetch(
+      `http://localhost:8080/api/holdings/portfolio/${PORTFOLIO_ID}/summary`
+    )
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("SUMMARY DATA:", data);
+        setSummary(data);
+      })
+      .catch(console.error);
 
-  fetch(
-    `http://localhost:8080/api/holdings/account/${ACCOUNT_ID}`
-  )
-    .then((response) => response.json())
-    .then((data) => setHoldings(data))
-    .catch(console.error);
-}, []);
+    fetch(
+      `http://localhost:8080/api/holdings/account/${ACCOUNT_ID}`
+    )
+      .then((response) => response.json())
+      .then((data) => setHoldings(data))
+      .catch(console.error);
+  }, []);
   return (
     <div
       style={{
@@ -126,21 +129,19 @@ function App() {
           {[
             [
               "Portfolio Value",
-              `$${summary?.portfolioValue?.toFixed?.(2) ?? "0"}`
+              `$${Number(summary?.totalMarketValue ?? 0).toFixed(2)}`
             ],
             [
               "Unrealized Gain",
-              `$${summary?.unrealizedGain?.toFixed?.(2) ?? "0"}`
+              `$${Number(summary?.totalUnrealizedGain ?? 0).toFixed(2)}`
             ],
             [
               "Top Holding",
-              holdings[0]?.symbol ?? "-"
+              summary?.topHoldingSymbol ?? "-"
             ],
             [
               "Health Score",
-              summary?.unrealizedGain > 0
-                ? "STRONG"
-                : "WEAK"
+              summary?.portfolioHealthLabel ?? "-"
             ]
           ].map(([label, value]) => (
             <div
