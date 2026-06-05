@@ -33,6 +33,7 @@ function App() {
   const [holdings, setHoldings] = useState<any[]>([]);
   const [performance, setPerformance] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [valuation, setValuation] = useState<any>(null);
 
   useEffect(() => {
     fetch(
@@ -64,6 +65,25 @@ function App() {
     )
       .then((response) => response.json())
       .then((data) => setTransactions(data))
+      .catch(console.error);
+
+    fetch("http://localhost:8080/api/valuations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        symbol: "AAPL",
+        currentPrice: 370,
+        earningsPerShare: 7.5,
+        growthRatePercent: 8,
+        discountRatePercent: 10,
+        years: 10,
+        terminalMultiple: 22
+      })
+    })
+      .then((response) => response.json())
+      .then((data) => setValuation(data))
       .catch(console.error);
 
   }, []);
