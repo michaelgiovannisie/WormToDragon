@@ -154,14 +154,8 @@ public class HoldingService {
     }
 
     public List<PortfolioHoldingResponse> getHoldingsByPortfolioId(UUID portfolioId) {
-        List<Holding> holdings = holdingRepository.findAll()
-                .stream()
-                .filter(holding -> holding.getAccount()
-                        .getPortfolio()
-                        .getId()
-                        .equals(portfolioId))
-                .filter(Holding::getActive)
-                .toList();
+        List<Holding> holdings =
+        holdingRepository.findActiveByPortfolioIdWithAssetAndAccount(portfolioId);
 
         Map<UUID, List<Holding>> holdingsByAsset = holdings.stream()
                 .collect(Collectors.groupingBy(holding -> holding.getAsset().getId()));
