@@ -28,9 +28,9 @@ public class MarketDataService {
         this.snapshotService = snapshotService;
     }
 
-    public UpdateMarketPriceResponse updateMarketPrice(
-            UpdateMarketPriceRequest request
-    ) {
+    public UpdateMarketPriceResponse updateManualPrice(
+        UpdateMarketPriceRequest request
+        ) {
         List<Holding> holdings = holdingRepository.findByAssetSymbolWithAccountAndPortfolio(
                 request.symbol()
         );

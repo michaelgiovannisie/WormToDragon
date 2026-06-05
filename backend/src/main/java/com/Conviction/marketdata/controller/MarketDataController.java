@@ -23,6 +23,6 @@ public class MarketDataController {
     public UpdateMarketPriceResponse updateMarketPrice(
             @RequestBody UpdateMarketPriceRequest request
     ) {
-        return marketDataService.updateMarketPrice(request);
+        return marketDataService.updateManualPrice(request);
     }
 }
