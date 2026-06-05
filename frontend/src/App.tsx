@@ -27,6 +27,7 @@ const ACCOUNT_ID =
 function App() {
   const [summary, setSummary] = useState<any>(null);
   const [holdings, setHoldings] = useState<any[]>([]);
+  const [performance, setPerformance] = useState<any[]>([]);
 
   useEffect(() => {
     fetch(
@@ -45,6 +46,14 @@ function App() {
       .then((response) => response.json())
       .then((data) => setHoldings(data))
       .catch(console.error);
+
+    fetch(
+      `http://localhost:8080/api/holdings/portfolio/${PORTFOLIO_ID}/performance`
+    )
+      .then((response) => response.json())
+      .then((data) => setPerformance(data))
+      .catch(console.error);
+
   }, []);
   return (
     <div
@@ -216,16 +225,13 @@ function App() {
           </div>
 
           <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={portfolioData}>
+            <LineChart data={performance.length > 0 ? performance : portfolioData}>
               <CartesianGrid
                 stroke="rgba(200,169,106,0.08)"
                 vertical={false}
               />
 
-              <XAxis
-                dataKey="month"
-                stroke="#9C927D"
-              />
+              <XAxis dataKey="month" stroke="#9C927D" />
 
               <YAxis
                 stroke="#9C927D"
@@ -242,7 +248,7 @@ function App() {
 
               <Line
                 type="monotone"
-                dataKey="value"
+                dataKey="portfolioValue"
                 stroke="#C8A96A"
                 strokeWidth={4}
                 dot={false}
