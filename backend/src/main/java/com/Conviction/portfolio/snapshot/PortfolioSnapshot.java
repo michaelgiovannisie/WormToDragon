@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,7 +23,15 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "portfolio_snapshots")
+@Table(
+        name = "portfolio_snapshots",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_portfolio_snapshot_date",
+                        columnNames = {"portfolio_id", "snapshot_date"}
+                )
+        }
+)
 public class PortfolioSnapshot {
 
     @Id

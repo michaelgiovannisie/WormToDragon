@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.conviction.portfolio.snapshot.PortfolioSnapshot;
+import com.conviction.portfolio.snapshot.dto.PortfolioSnapshotResponse;
 import com.conviction.portfolio.snapshot.repository.PortfolioSnapshotRepository;
 import com.conviction.portfolio.snapshot.service.PortfolioSnapshotService;
 
@@ -29,17 +30,34 @@ public class PortfolioSnapshotController {
     }
 
     @PostMapping
-    public PortfolioSnapshot createSnapshot(
+    public PortfolioSnapshotResponse createSnapshot(
             @PathVariable UUID portfolioId
     ) {
-        return snapshotService.createSnapshot(portfolioId);
+        return toResponse(snapshotService.createSnapshot(portfolioId));
     }
 
     @GetMapping
-    public List<PortfolioSnapshot> getSnapshots(
+    public List<PortfolioSnapshotResponse> getSnapshots(
             @PathVariable UUID portfolioId
     ) {
         return snapshotRepository
-                .findByPortfolioIdOrderBySnapshotDateAsc(portfolioId);
+                .findByPortfolioIdOrderBySnapshotDateAsc(portfolioId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private PortfolioSnapshotResponse toResponse(PortfolioSnapshot snapshot) {
+        return new PortfolioSnapshotResponse(
+                snapshot.getId(),
+                snapshot.getPortfolioId(),
+                snapshot.getSnapshotDate(),
+                snapshot.getTotalMarketValue(),
+                snapshot.getTotalCostBasis(),
+                snapshot.getUnrealizedGain(),
+                snapshot.getRealizedGain(),
+                snapshot.getCashFlow(),
+                snapshot.getCreatedAt()
+        );
     }
 }
