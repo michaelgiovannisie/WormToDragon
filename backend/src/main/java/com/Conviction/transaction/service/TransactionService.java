@@ -96,7 +96,9 @@ public class TransactionService {
 
         holdingService.updateHoldingFromTransaction(savedTransaction);
 
-        return toResponse(savedTransaction);
+        Transaction updatedTransaction = transactionRepository.save(savedTransaction);
+
+        return toResponse(updatedTransaction);
     }
 
     public List<TransactionResponse> getTransactionsByAccountId(UUID accountId) {
