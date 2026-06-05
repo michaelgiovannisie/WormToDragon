@@ -48,7 +48,7 @@ function App() {
       .catch(console.error);
 
     fetch(
-      `http://localhost:8080/api/holdings/portfolio/${PORTFOLIO_ID}/performance`
+      `http://localhost:8080/api/portfolios/${PORTFOLIO_ID}/snapshots`
     )
       .then((response) => response.json())
       .then((data) => setPerformance(data))
@@ -231,7 +231,7 @@ function App() {
                 vertical={false}
               />
 
-              <XAxis dataKey="month" stroke="#9C927D" />
+              <XAxis dataKey="snapshotDate" stroke="#9C927D" />
 
               <YAxis
                 stroke="#9C927D"
@@ -248,10 +248,10 @@ function App() {
 
               <Line
                 type="monotone"
-                dataKey="portfolioValue"
+                dataKey="totalMarketValue"
                 stroke="#C8A96A"
                 strokeWidth={4}
-                dot={false}
+                dot
               />
             </LineChart>
           </ResponsiveContainer>
