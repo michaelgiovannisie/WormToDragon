@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
@@ -48,5 +50,16 @@ public interface TransactionRepository
                 BigDecimal quantity,
                 BigDecimal pricePerUnit,
                 LocalDate transactionDate
+        );
+
+        @Query("""
+        SELECT t
+        FROM Transaction t
+        LEFT JOIN FETCH t.asset
+        JOIN FETCH t.account
+        WHERE t.account.id = :accountId
+        """)
+        List<Transaction> findByAccountIdWithAssetAndAccount(
+                @Param("accountId") UUID accountId
         );
 }

@@ -102,7 +102,7 @@ public class TransactionService {
     }
 
     public List<TransactionResponse> getTransactionsByAccountId(UUID accountId) {
-        return transactionRepository.findByAccountId(accountId)
+        return transactionRepository.findByAccountIdWithAssetAndAccount(accountId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
