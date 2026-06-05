@@ -1,23 +1,23 @@
 package com.conviction.imports.service;
 
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
 import com.conviction.account.entity.Account;
 import com.conviction.account.repository.AccountRepository;
 import com.conviction.asset.entity.Asset;
 import com.conviction.asset.repository.AssetRepository;
-import com.conviction.imports.dto.ImportPreviewResponse;
+import com.conviction.imports.dto.ImportResultResponse;
 import com.conviction.imports.dto.ImportedTransactionRow;
 import com.conviction.imports.dto.RobinhoodCsvRow;
 import com.conviction.imports.mapper.RobinhoodTransactionMapper;
 import com.conviction.imports.parser.RobinhoodCsvParser;
 import com.conviction.transaction.dto.CreateTransactionRequest;
 import com.conviction.transaction.service.TransactionService;
-
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
 
 @Service
 public class RobinhoodImportService {
@@ -42,11 +42,11 @@ public class RobinhoodImportService {
         this.transactionService = transactionService;
     }
 
-    public ImportPreviewResponse importCsv(
-            UUID portfolioId,
-            UUID accountId,
-            MultipartFile file
-    ) {
+        public ImportResultResponse importCsv(
+                UUID portfolioId,
+                UUID accountId,
+                MultipartFile file
+        ) {
         List<RobinhoodCsvRow> rows = parser.parse(file);
 
         List<String> columns = rows.isEmpty()
@@ -60,17 +60,25 @@ public class RobinhoodImportService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("Account not found"));
 
+        int assetsCreated = 0;
+        int transactionsImported = 0;
+        int transactionsSkipped = 0;
+
         for (ImportedTransactionRow row : importedRows) {
             Asset asset = assetRepository.findBySymbol(row.symbol())
-                    .orElseGet(() -> {
-                        Asset newAsset = new Asset();
-                        newAsset.setSymbol(row.symbol());
-                        newAsset.setName(row.assetName());
-                        newAsset.setAssetType("EQUITY");
-                        newAsset.setExchange("UNKNOWN");
-                        newAsset.setCurrency("USD");
-                        return assetRepository.save(newAsset);
-                    });
+                        .orElse(null);
+
+                if (asset == null) {
+                Asset newAsset = new Asset();
+                newAsset.setSymbol(row.symbol());
+                newAsset.setName(row.assetName());
+                newAsset.setAssetType("EQUITY");
+                newAsset.setExchange("UNKNOWN");
+                newAsset.setCurrency("USD");
+
+                asset = assetRepository.save(newAsset);
+                assetsCreated++;
+        }
 
             CreateTransactionRequest request = new CreateTransactionRequest(
                     account.getId(),
@@ -84,8 +92,15 @@ public class RobinhoodImportService {
             );
 
             transactionService.createTransaction(request);
+            transactionsImported++;
         }
 
-        return new ImportPreviewResponse(importedRows.size(), columns);
+        return new ImportResultResponse(
+                importedRows.size(),
+                transactionsImported,
+                assetsCreated,
+                transactionsSkipped,
+                columns
+        );
     }
 }

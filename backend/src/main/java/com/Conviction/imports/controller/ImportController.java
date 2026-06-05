@@ -1,6 +1,6 @@
 package com.conviction.imports.controller;
 
-import com.conviction.imports.dto.ImportPreviewResponse;
+import com.conviction.imports.dto.ImportResultResponse;
 import com.conviction.imports.service.RobinhoodImportService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,12 +19,12 @@ public class ImportController {
     }
 
     @PostMapping("/robinhood")
-    public ResponseEntity<ImportPreviewResponse> importRobinhood(
+    public ResponseEntity<ImportResultResponse> importRobinhood(
             @RequestParam("portfolioId") UUID portfolioId,
             @RequestParam("accountId") UUID accountId,
             @RequestParam("file") MultipartFile file
     ) {
-        ImportPreviewResponse response =
+        ImportResultResponse response =
                 importService.importCsv(portfolioId, accountId, file);
 
         return ResponseEntity.ok(response);
