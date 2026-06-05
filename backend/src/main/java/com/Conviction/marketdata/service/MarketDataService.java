@@ -29,8 +29,9 @@ public class MarketDataService {
     public UpdateMarketPriceResponse updateMarketPrice(
             UpdateMarketPriceRequest request
     ) {
-        List<Holding> holdings =
-                holdingRepository.findByAssetSymbol(request.symbol());
+        List<Holding> holdings = holdingRepository.findByAssetSymbolWithAccountAndPortfolio(
+                request.symbol()
+        );
 
         Set<UUID> affectedPortfolioIds = holdings.stream()
             .map(holding -> holding.getAccount().getPortfolio().getId())
