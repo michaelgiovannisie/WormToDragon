@@ -40,4 +40,27 @@ public class PortfolioSnapshotService {
 
         return snapshotRepository.save(snapshot);
     }
+
+    public PortfolioSnapshot createOrUpdateTodaySnapshot(UUID portfolioId) {
+        PortfolioSummaryResponse summary =
+                holdingService.getPortfolioSummary(portfolioId);
+
+        PortfolioSnapshot snapshot =
+                snapshotRepository
+                        .findByPortfolioIdAndSnapshotDate(
+                                portfolioId,
+                                LocalDate.now()
+                        )
+                        .orElseGet(PortfolioSnapshot::new);
+
+        snapshot.setPortfolioId(portfolioId);
+        snapshot.setSnapshotDate(LocalDate.now());
+        snapshot.setTotalMarketValue(summary.totalMarketValue());
+        snapshot.setTotalCostBasis(summary.totalCostBasis());
+        snapshot.setUnrealizedGain(summary.totalUnrealizedGain());
+        snapshot.setRealizedGain(summary.totalRealizedGain());
+        snapshot.setCashFlow(summary.netCashFlow());
+
+        return snapshotRepository.save(snapshot);
+    }
 }
