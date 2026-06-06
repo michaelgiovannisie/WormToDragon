@@ -55,4 +55,16 @@ public interface HoldingRepository extends JpaRepository<Holding, UUID> {
     List<Holding> findByAssetSymbolWithAccountAndPortfolio(
             @Param("symbol") String symbol
     );
+
+    @Query("""
+        SELECT h
+        FROM Holding h
+        JOIN FETCH h.asset
+        JOIN FETCH h.account
+        WHERE h.asset.symbol = :symbol
+        AND h.active = true
+        """)
+    List<Holding> findActiveByAssetSymbolWithAssetAndAccount(
+            @Param("symbol") String symbol
+    );
 }
