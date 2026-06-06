@@ -34,6 +34,8 @@ function App() {
   const [performance, setPerformance] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [valuation, setValuation] = useState<any>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [assetDetail, setAssetDetail] = useState<any>(null);
 
   useEffect(() => {
     fetch(
@@ -67,26 +69,235 @@ function App() {
       .then((data) => setTransactions(data))
       .catch(console.error);
 
-    fetch("http://localhost:8080/api/valuations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        symbol: "AAPL",
-        currentPrice: 370,
-        earningsPerShare: 7.5,
-        growthRatePercent: 8,
-        discountRatePercent: 10,
-        years: 10,
-        terminalMultiple: 22
-      })
-    })
+    fetch("http://localhost:8080/api/valuations/AAPL/scenarios")
       .then((response) => response.json())
-      .then((data) => setValuation(data))
+      .then((data) => setValuation(data[0] ?? null))
       .catch(console.error);
 
   }, []);
+
+  useEffect(() => {
+    if (!selectedSymbol) {
+      return;
+    }
+
+    fetch(`http://localhost:8080/api/assets/${selectedSymbol}/detail`)
+      .then((response) => response.json())
+      .then((data) => setAssetDetail(data))
+      .catch(console.error);
+  }, [selectedSymbol]);
+
+  if (selectedSymbol && assetDetail) {
+  const latestValuation = assetDetail.valuationScenarios?.[0];
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0B1020",
+        color: "#F5F1E8",
+        fontFamily: "Georgia, serif",
+        padding: "48px"
+      }}
+    >
+      <button
+        onClick={() => setSelectedSymbol(null)}
+        style={{
+          background: "transparent",
+          color: "#C8A96A",
+          border: "1px solid rgba(200,169,106,0.35)",
+          borderRadius: "999px",
+          padding: "10px 18px",
+          cursor: "pointer"
+        }}
+      >
+        ← Back to Dashboard
+      </button>
+
+      <p
+        style={{
+          color: "#C8A96A",
+          letterSpacing: "0.3em",
+          fontSize: "12px",
+          textTransform: "uppercase",
+          marginTop: "48px"
+        }}
+      >
+        Asset Detail
+      </p>
+
+      <h1 style={{ fontSize: "64px", marginTop: "16px" }}>
+        {assetDetail.symbol}
+      </h1>
+
+      <p style={{ color: "#9C927D" }}>
+        {assetDetail.assetName}
+      </p>
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "24px",
+          marginTop: "48px"
+        }}
+      >
+        {[
+          [
+            "Market Value",
+            `$${Number(assetDetail.holding?.marketValue ?? 0).toFixed(2)}`
+          ],
+          [
+            "Unrealized Gain",
+            `$${Number(assetDetail.holding?.unrealizedGain ?? 0).toFixed(2)}`
+          ],
+          [
+            "Intrinsic Value",
+            `$${Number(latestValuation?.intrinsicValue ?? 0).toFixed(2)}`
+          ],
+          [
+            "MOS",
+            `${Number(latestValuation?.marginOfSafetyPercent ?? 0).toFixed(2)}%`
+          ]
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            style={{
+              background: "#11182A",
+              border: "1px solid rgba(200,169,106,0.25)",
+              borderRadius: "20px",
+              padding: "28px"
+            }}
+          >
+            <p style={{ color: "#9C927D", fontSize: "14px" }}>{label}</p>
+            <h3 style={{ fontSize: "30px", marginTop: "16px" }}>{value}</h3>
+          </div>
+          ))}
+        </section>
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            Asset Ledger
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            {assetDetail.symbol} Transactions
+          </h3>
+
+          <table
+            style={{
+              width: "100%",
+              marginTop: "28px",
+              borderCollapse: "collapse"
+            }}
+          >
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Realized Gain</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {assetDetail.transactions.map((transaction: any) => (
+                <tr
+                  key={transaction.id}
+                  style={{
+                    borderTop: "1px solid rgba(200,169,106,0.15)"
+                  }}
+                >
+                  <td style={{ padding: "18px 0" }}>
+                    {transaction.transactionDate}
+                  </td>
+                  <td>{transaction.transactionType}</td>
+                  <td>{transaction.quantity}</td>
+                  <td>${Number(transaction.pricePerUnit).toFixed(2)}</td>
+                  <td>${Number(transaction.realizedGain).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            Valuation History
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Saved Scenarios
+          </h3>
+
+          <table
+            style={{
+              width: "100%",
+              marginTop: "28px",
+              borderCollapse: "collapse"
+            }}
+          >
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Date</th>
+                <th>Intrinsic Value</th>
+                <th>MOS</th>
+                <th>Label</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {assetDetail.valuationScenarios.map((scenario: any) => (
+                <tr
+                  key={scenario.id}
+                  style={{
+                    borderTop: "1px solid rgba(200,169,106,0.15)"
+                  }}
+                >
+                  <td style={{ padding: "18px 0" }}>
+                    {new Date(scenario.createdAt).toLocaleDateString()}
+                  </td>
+                  <td>${Number(scenario.intrinsicValue).toFixed(2)}</td>
+                  <td>{Number(scenario.marginOfSafetyPercent).toFixed(2)}%</td>
+                  <td>{scenario.valuationLabel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -467,7 +678,15 @@ function App() {
                     borderTop: "1px solid rgba(200,169,106,0.15)"
                   }}
                 >
-                  <td style={{ padding: "18px 0", color: "#F5F1E8" }}>
+                  <td
+                    onClick={() => setSelectedSymbol(holding.symbol)}
+                    style={{
+                      padding: "18px 0",
+                      color: "#C8A96A",
+                      cursor: "pointer",
+                      fontWeight: 700
+                    }}
+                  >
                     {holding.symbol}
                   </td>
                   <td>{holding.quantityHeld}</td>

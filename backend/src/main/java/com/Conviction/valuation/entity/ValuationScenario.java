@@ -4,8 +4,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.conviction.valuation.enums.ValuationCaseType;
+import com.conviction.valuation.enums.ValuationModelType;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,6 +34,12 @@ public class ValuationScenario {
     private UUID id;
 
     private String symbol;
+
+    @Enumerated(EnumType.STRING)
+    private ValuationModelType modelType;
+
+    @Enumerated(EnumType.STRING)
+    private ValuationCaseType caseType;
 
     @Column(precision = 19, scale = 4)
     private BigDecimal currentPrice;

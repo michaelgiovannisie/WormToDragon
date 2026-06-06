@@ -69,6 +69,8 @@ public class ValuationService {
         ValuationScenario scenario = new ValuationScenario();
 
         scenario.setSymbol(request.symbol());
+        scenario.setModelType(request.modelType());
+        scenario.setCaseType(request.caseType());
         scenario.setCurrentPrice(request.currentPrice());
         scenario.setEarningsPerShare(request.earningsPerShare());
         scenario.setGrowthRatePercent(request.growthRatePercent());
@@ -83,6 +85,8 @@ public class ValuationService {
 
         return new ValuationResponse(
                 request.symbol(),
+                request.modelType(),
+                request.caseType(),
                 request.currentPrice(),
                 intrinsicValue,
                 marginOfSafetyPercent,
