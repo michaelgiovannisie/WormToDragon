@@ -6,9 +6,12 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.conviction.valuation.dto.ValuationPresetRequest;
 import com.conviction.valuation.dto.ValuationRequest;
 import com.conviction.valuation.dto.ValuationResponse;
 import com.conviction.valuation.entity.ValuationScenario;
+import com.conviction.valuation.enums.ValuationCaseType;
+import com.conviction.valuation.enums.ValuationModelType;
 import com.conviction.valuation.repository.ValuationScenarioRepository;
 
 @Service
@@ -91,6 +94,52 @@ public class ValuationService {
                 intrinsicValue,
                 marginOfSafetyPercent,
                 valuationLabel
+        );
+    }
+
+    public List<ValuationResponse> calculatePresets(
+            ValuationPresetRequest request
+    ) {
+        return List.of(
+                calculateIntrinsicValue(
+                        new ValuationRequest(
+                                request.symbol(),
+                                ValuationModelType.EPS_MULTIPLE,
+                                ValuationCaseType.BEAR,
+                                request.currentPrice(),
+                                request.earningsPerShare(),
+                                BigDecimal.valueOf(4),
+                                BigDecimal.valueOf(11),
+                                10,
+                                BigDecimal.valueOf(16)
+                        )
+                ),
+                calculateIntrinsicValue(
+                        new ValuationRequest(
+                                request.symbol(),
+                                ValuationModelType.EPS_MULTIPLE,
+                                ValuationCaseType.BASE,
+                                request.currentPrice(),
+                                request.earningsPerShare(),
+                                BigDecimal.valueOf(8),
+                                BigDecimal.valueOf(10),
+                                10,
+                                BigDecimal.valueOf(22)
+                        )
+                ),
+                calculateIntrinsicValue(
+                        new ValuationRequest(
+                                request.symbol(),
+                                ValuationModelType.EPS_MULTIPLE,
+                                ValuationCaseType.BULL,
+                                request.currentPrice(),
+                                request.earningsPerShare(),
+                                BigDecimal.valueOf(12),
+                                BigDecimal.valueOf(9),
+                                10,
+                                BigDecimal.valueOf(28)
+                        )
+                )
         );
     }
 }
