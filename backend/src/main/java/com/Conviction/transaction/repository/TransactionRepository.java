@@ -43,6 +43,18 @@ public interface TransactionRepository
             LocalDate endDate
     );
 
+    @Query("""
+        SELECT t
+        FROM Transaction t
+        JOIN FETCH t.asset a
+        JOIN FETCH t.account
+        WHERE a.symbol = :symbol
+        ORDER BY t.transactionDate DESC
+        """)
+        List<Transaction> findByAssetSymbolOrderByTransactionDateDesc(
+                @Param("symbol") String symbol
+        );
+
     boolean existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndTransactionDate(
                 UUID accountId,
                 UUID assetId,

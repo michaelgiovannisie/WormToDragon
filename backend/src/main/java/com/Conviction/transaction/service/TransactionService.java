@@ -108,7 +108,7 @@ public class TransactionService {
                 .toList();
     }
 
-    private TransactionResponse toResponse(Transaction transaction) {
+    public TransactionResponse toResponse(Transaction transaction) {
         return new TransactionResponse(
                 transaction.getId(),
                 transaction.getAccount().getId(),
