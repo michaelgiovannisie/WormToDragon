@@ -1,18 +1,14 @@
-package com.conviction.valuation.entity;
+package com.conviction.historicalprice.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import com.conviction.valuation.enums.ValuationCaseType;
-import com.conviction.valuation.enums.ValuationModelType;
 
 import com.conviction.asset.entity.Asset;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,6 +17,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,49 +28,44 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "valuation_scenarios")
-public class ValuationScenario {
+@Table(
+        name = "historical_prices",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_historical_price_asset_date",
+                        columnNames = { "asset_id", "price_date" }
+                )
+        }
+)
+public class HistoricalPrice {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    private String symbol;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "asset_id")
+    @JoinColumn(name = "asset_id", nullable = false)
     private Asset asset;
 
-    @Enumerated(EnumType.STRING)
-    private ValuationModelType modelType;
-
-    @Enumerated(EnumType.STRING)
-    private ValuationCaseType caseType;
+    @Column(nullable = false)
+    private LocalDate priceDate;
 
     @Column(precision = 19, scale = 4)
-    private BigDecimal currentPrice;
+    private BigDecimal open;
 
     @Column(precision = 19, scale = 4)
-    private BigDecimal earningsPerShare;
+    private BigDecimal high;
 
     @Column(precision = 19, scale = 4)
-    private BigDecimal growthRatePercent;
+    private BigDecimal low;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal close;
 
     @Column(precision = 19, scale = 4)
-    private BigDecimal discountRatePercent;
+    private BigDecimal adjustedClose;
 
-    private int years;
-
-    @Column(precision = 19, scale = 4)
-    private BigDecimal terminalMultiple;
-
-    @Column(precision = 19, scale = 4)
-    private BigDecimal intrinsicValue;
-
-    @Column(precision = 19, scale = 4)
-    private BigDecimal marginOfSafetyPercent;
-
-    private String valuationLabel;
+    private Long volume;
 
     private LocalDateTime createdAt;
 
@@ -81,5 +73,4 @@ public class ValuationScenario {
     public void prePersist() {
         createdAt = LocalDateTime.now();
     }
-
 }
