@@ -48,6 +48,18 @@ public class AssetService {
                 .toList();
     }
 
+    public List<AssetResponse> searchAssets(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        return assetRepository.searchActiveAssets(query.trim())
+                .stream()
+                .limit(10)
+                .map(this::toResponse)
+                .toList();
+    }
+
     private AssetResponse toResponse(Asset asset) {
         return new AssetResponse(
                 asset.getId(),
