@@ -7,10 +7,14 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Set;
 
 @Component
 public class RobinhoodTransactionMapper {
+
+    private static final DateTimeFormatter DATE_FMT =
+            DateTimeFormatter.ofPattern("M/d/yyyy");
 
     private static final Set<String> SKIP_CODES = Set.of(
         "CDIV", "ACH", "INT", "DTAX", "AFEE", "DFEE", "RTP",
@@ -33,7 +37,7 @@ public class RobinhoodTransactionMapper {
 
         String dateStr = row.values().getOrDefault("Activity Date", "").trim();
         if (dateStr.isEmpty()) return null;
-        LocalDate transactionDate = LocalDate.parse(dateStr);
+        LocalDate transactionDate = LocalDate.parse(dateStr, DATE_FMT);
 
         // First line of description only (strip CUSIP line)
         String rawDesc = row.values().getOrDefault("Description", symbol).trim();

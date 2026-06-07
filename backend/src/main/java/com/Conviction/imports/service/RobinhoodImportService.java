@@ -112,8 +112,12 @@ public class RobinhoodImportService {
                     row.notes()
             );
 
-            transactionService.createTransaction(request);
-            transactionsImported++;
+            try {
+                transactionService.createTransaction(request);
+                transactionsImported++;
+            } catch (Exception e) {
+                transactionsSkipped++;
+            }
         }
 
         return new ImportResultResponse(
