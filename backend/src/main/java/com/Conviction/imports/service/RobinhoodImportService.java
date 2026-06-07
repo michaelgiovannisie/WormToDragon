@@ -85,12 +85,13 @@ public class RobinhoodImportService {
         }
 
         boolean duplicate =
-                transactionRepository.existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndTransactionDate(
+                transactionRepository.existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndFeesAndTransactionDate(
                         account.getId(),
                         asset.getId(),
                         row.transactionType(),
                         row.quantity(),
                         row.pricePerUnit(),
+                        BigDecimal.ZERO,
                         row.transactionDate()
                 );
 
