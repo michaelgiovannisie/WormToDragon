@@ -1,14 +1,18 @@
 package com.conviction.tax.controller;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.conviction.tax.dto.TaxLotAllocationResponse;
 import com.conviction.tax.dto.TaxLotResponse;
 import com.conviction.tax.entity.TaxLot;
+import com.conviction.tax.entity.TaxLotAllocation;
+import com.conviction.tax.repository.TaxLotAllocationRepository;
 import com.conviction.tax.repository.TaxLotRepository;
 
 @RestController
@@ -16,9 +20,14 @@ import com.conviction.tax.repository.TaxLotRepository;
 public class TaxLotController {
 
     private final TaxLotRepository taxLotRepository;
-
-    public TaxLotController(TaxLotRepository taxLotRepository) {
+    private final TaxLotAllocationRepository allocationRepository;
+    
+    public TaxLotController(
+            TaxLotRepository taxLotRepository,
+            TaxLotAllocationRepository allocationRepository
+    ) {
         this.taxLotRepository = taxLotRepository;
+        this.allocationRepository = allocationRepository;
     }
 
     @GetMapping("/assets/{symbol}")
@@ -29,6 +38,17 @@ public class TaxLotController {
                 .findByAssetSymbolWithDetails(symbol.toUpperCase())
                 .stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @GetMapping("/transactions/{sellTransactionId}/allocations")
+    public List<TaxLotAllocationResponse> getAllocationsBySellTransaction(
+            @PathVariable UUID sellTransactionId
+    ) {
+        return allocationRepository
+                .findBySellTransactionIdWithDetails(sellTransactionId)
+                .stream()
+                .map(this::toAllocationResponse)
                 .toList();
     }
 
@@ -49,4 +69,21 @@ public class TaxLotController {
                 lot.getCreatedAt()
         );
     }
+
+    private TaxLotAllocationResponse toAllocationResponse(
+            TaxLotAllocation allocation
+    ) {
+        return new TaxLotAllocationResponse(
+                allocation.getId(),
+                allocation.getSellTransaction().getId(),
+                allocation.getTaxLot().getId(),
+                allocation.getTaxLot().getBuyTransaction().getId(),
+                allocation.getQuantityAllocated(),
+                allocation.getProceeds(),
+                allocation.getCostBasis(),
+                allocation.getRealizedGain(),
+                allocation.getCreatedAt()
+        );
+    }
+
 }
