@@ -91,6 +91,12 @@ public class ValuationService {
                 request.modelType(),
                 request.caseType(),
                 request.currentPrice(),
+
+                request.growthRatePercent(),
+                request.discountRatePercent(),
+                request.years(),
+                request.terminalMultiple(),
+
                 intrinsicValue,
                 marginOfSafetyPercent,
                 valuationLabel

@@ -10,6 +10,12 @@ public record ValuationResponse(
         ValuationModelType modelType,
         ValuationCaseType caseType,
         BigDecimal currentPrice,
+
+        BigDecimal growthRatePercent,
+        BigDecimal discountRatePercent,
+        int years,
+        BigDecimal terminalMultiple,
+
         BigDecimal intrinsicValue,
         BigDecimal marginOfSafetyPercent,
         String valuationLabel
