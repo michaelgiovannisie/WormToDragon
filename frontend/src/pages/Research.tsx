@@ -63,7 +63,7 @@ export default function Research() {
       .then(r => r.json()).then(setDetail).catch(console.error);
 
     fetch(`${API}/historical-prices/${symbol}`)
-      .then(r => r.json()).then(setPrices).catch(console.error);
+      .then(r => r.json()).then(d => setPrices(Array.isArray(d) ? d : [])).catch(console.error);
 
     fetch(`${API}/dca/${symbol}/all?availableCash=${dcaCash}`)
       .then(r => r.json()).then(setDcaRecs).catch(console.error);
@@ -105,7 +105,7 @@ export default function Research() {
         fetch(`${API}/historical-prices/${symbol}`).then(r => r.json()),
         fetch(`${API}/assets/${symbol}/detail`).then(r => r.json()),
       ]);
-      setPrices(newPrices);
+      setPrices(Array.isArray(newPrices) ? newPrices : []);
       setDetail(newDetail);
       // Pre-fill valuation form with fresh metrics
       if (data.metrics) {

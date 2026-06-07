@@ -44,7 +44,8 @@ public class FMPHistoricalPriceSync {
     }
 
     public List<HistoricalPriceResponse> syncFull(String symbol) {
-        return sync(symbol, null, null);
+        // Default to 2 years to avoid huge payloads
+        return sync(symbol, LocalDate.now().minusYears(2), LocalDate.now());
     }
 
     private UpsertHistoricalPriceRequest toUpsertRequest(Map<String, Object> row) {
@@ -54,7 +55,7 @@ public class FMPHistoricalPriceSync {
                 toBD(row.get("high")),
                 toBD(row.get("low")),
                 toBD(row.get("close")),
-                toBD(row.get("adjClose")),
+                toBD(row.get("adjClose") != null ? row.get("adjClose") : row.get("close")),
                 row.get("volume") != null ? Long.valueOf(row.get("volume").toString().split("\\.")[0]) : null
         );
     }
