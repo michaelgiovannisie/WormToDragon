@@ -164,6 +164,8 @@ function App() {
         (1 - targetMarginOfSafetyPercent / 100);
 
   const recentValuationScenarios = valuationScenarios.slice(0, 5);
+  const taxLots = assetDetail.taxLots ?? [];
+  const taxLotAllocations = assetDetail.taxLotAllocations ?? [];
 
   const valuationTrendData =
     [...recentValuationScenarios]
@@ -448,6 +450,177 @@ function App() {
                   <td>${Number(transaction.realizedGain).toFixed(2)}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </section>
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            Tax Lots
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Open Lots
+          </h3>
+
+          <table
+            style={{
+              width: "100%",
+              marginTop: "28px",
+              borderCollapse: "collapse"
+            }}
+          >
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Acquired</th>
+                <th>Purchased</th>
+                <th>Remaining</th>
+                <th>Cost / Share</th>
+                <th>Lot Cost</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {taxLots.length === 0 ? (
+                <tr style={{ borderTop: "1px solid rgba(200,169,106,0.15)" }}>
+                  <td
+                    colSpan={6}
+                    style={{ padding: "18px 0", color: "#9C927D" }}
+                  >
+                    No tax lots yet.
+                  </td>
+                </tr>
+              ) : (
+                taxLots.map((lot: any) => (
+                  <tr
+                    key={lot.id}
+                    style={{
+                      borderTop: "1px solid rgba(200,169,106,0.15)"
+                    }}
+                  >
+                    <td style={{ padding: "18px 0" }}>{lot.acquisitionDate}</td>
+                    <td>{Number(lot.quantityPurchased).toFixed(4)}</td>
+                    <td>{Number(lot.quantityRemaining).toFixed(4)}</td>
+                    <td>${Number(lot.costBasisPerUnit).toFixed(2)}</td>
+                    <td>${Number(lot.totalCostBasis).toFixed(2)}</td>
+                    <td>
+                      <span
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "999px",
+                          fontSize: "12px",
+                          letterSpacing: "0.08em",
+                          background: lot.closed
+                            ? "rgba(201,112,100,0.15)"
+                            : "rgba(127,176,105,0.15)",
+                          color: lot.closed ? "#E06C75" : "#8FD694"
+                        }}
+                      >
+                        {lot.closed ? "CLOSED" : "OPEN"}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        <section
+          style={{
+            marginTop: "48px",
+            background: "#11182A",
+            border: "1px solid rgba(200,169,106,0.25)",
+            borderRadius: "24px",
+            padding: "32px"
+          }}
+        >
+          <p
+            style={{
+              color: "#C8A96A",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}
+          >
+            FIFO Allocations
+          </p>
+
+          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Realized Gain Audit
+          </h3>
+
+          <table
+            style={{
+              width: "100%",
+              marginTop: "28px",
+              borderCollapse: "collapse"
+            }}
+          >
+            <thead>
+              <tr style={{ color: "#9C927D", textAlign: "left" }}>
+                <th>Quantity</th>
+                <th>Proceeds</th>
+                <th>Cost Basis</th>
+                <th>Realized Gain</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {taxLotAllocations.length === 0 ? (
+                <tr style={{ borderTop: "1px solid rgba(200,169,106,0.15)" }}>
+                  <td
+                    colSpan={5}
+                    style={{ padding: "18px 0", color: "#9C927D" }}
+                  >
+                    No FIFO allocations yet.
+                  </td>
+                </tr>
+              ) : (
+                taxLotAllocations.map((allocation: any) => (
+                  <tr
+                    key={allocation.id}
+                    style={{
+                      borderTop: "1px solid rgba(200,169,106,0.15)"
+                    }}
+                  >
+                    <td style={{ padding: "18px 0" }}>
+                      {Number(allocation.quantityAllocated).toFixed(4)}
+                    </td>
+                    <td>${Number(allocation.proceeds).toFixed(2)}</td>
+                    <td>${Number(allocation.costBasis).toFixed(2)}</td>
+                    <td
+                      style={{
+                        color:
+                          Number(allocation.realizedGain) >= 0
+                            ? "#8FD694"
+                            : "#E06C75"
+                      }}
+                    >
+                      ${Number(allocation.realizedGain).toFixed(2)}
+                    </td>
+                    <td>
+                      {new Date(allocation.createdAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>
