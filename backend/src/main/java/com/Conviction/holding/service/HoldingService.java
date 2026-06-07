@@ -18,6 +18,8 @@ import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.portfolio.dto.CashFlowTimelineResponse;
 import com.conviction.portfolio.dto.PortfolioPerformanceResponse;
 import com.conviction.portfolio.dto.PortfolioSummaryResponse;
+import com.conviction.tax.entity.TaxLotAllocation;
+import com.conviction.tax.repository.TaxLotAllocationRepository;
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
 import com.conviction.transaction.repository.TransactionRepository;
@@ -27,13 +29,16 @@ public class HoldingService {
 
     private final HoldingRepository holdingRepository;
     private final TransactionRepository transactionRepository;
+    private final TaxLotAllocationRepository allocationRepository;
 
     public HoldingService(
                 HoldingRepository holdingRepository,
-                TransactionRepository transactionRepository
+                TransactionRepository transactionRepository,
+                TaxLotAllocationRepository allocationRepository
         ) {
             this.holdingRepository = holdingRepository;
             this.transactionRepository = transactionRepository;
+            this.allocationRepository = allocationRepository;
         }
 
     public void updateHoldingFromTransaction(Transaction transaction) {
@@ -106,17 +111,34 @@ public class HoldingService {
                                 RoundingMode.HALF_UP
                         );
 
-        BigDecimal realizedGainPerShare =
-                transaction.getPricePerUnit()
-                        .subtract(averageCostBasis);
+        List<TaxLotAllocation> allocations =
+                allocationRepository.findBySellTransactionId(transaction.getId());
 
-        BigDecimal realizedGain =
-                realizedGainPerShare.multiply(transaction.getQuantity());
+        BigDecimal costBasisReduction;
 
-        transaction.setRealizedGain(realizedGain);
+        if (allocations.isEmpty()) {
+            costBasisReduction =
+                    averageCostBasis.multiply(transaction.getQuantity());
 
-        BigDecimal costBasisReduction =
-                averageCostBasis.multiply(transaction.getQuantity());
+            BigDecimal realizedGain =
+                    transaction.getPricePerUnit()
+                            .subtract(averageCostBasis)
+                            .multiply(transaction.getQuantity());
+
+            transaction.setRealizedGain(realizedGain);
+        } else {
+            costBasisReduction =
+                    allocations.stream()
+                            .map(TaxLotAllocation::getCostBasis)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal realizedGain =
+                    allocations.stream()
+                            .map(TaxLotAllocation::getRealizedGain)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            transaction.setRealizedGain(realizedGain);
+        }
 
         holding.setTotalCostBasis(
                 holding.getTotalCostBasis().subtract(costBasisReduction)

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.conviction.account.entity.Account;
 import com.conviction.account.repository.AccountRepository;
@@ -42,6 +43,7 @@ public class TransactionService {
         this.taxLotService = taxLotService;
     }
 
+    @Transactional
     public TransactionResponse createTransaction(CreateTransactionRequest request) {
         Account account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new IllegalArgumentException("Account not found"));

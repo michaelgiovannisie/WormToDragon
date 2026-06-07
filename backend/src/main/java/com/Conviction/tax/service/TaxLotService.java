@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.conviction.tax.entity.TaxLot;
 import com.conviction.tax.entity.TaxLotAllocation;
@@ -26,6 +27,7 @@ public class TaxLotService {
         this.allocationRepository = allocationRepository;
     }
 
+    @Transactional
     public void processTransaction(Transaction transaction) {
         if (transaction.getTransactionType() == TransactionType.BUY) {
             createLotFromBuy(transaction);
@@ -53,7 +55,13 @@ public class TaxLotService {
         taxLot.setAsset(transaction.getAsset());
         taxLot.setQuantityPurchased(transaction.getQuantity());
         taxLot.setQuantityRemaining(transaction.getQuantity());
-        taxLot.setCostBasisPerUnit(transaction.getPricePerUnit());
+        taxLot.setCostBasisPerUnit(
+                totalCostBasis.divide(
+                        transaction.getQuantity(),
+                        4,
+                        java.math.RoundingMode.HALF_UP
+                )
+        );
         taxLot.setTotalCostBasis(totalCostBasis);
         taxLot.setAcquisitionDate(transaction.getTransactionDate());
         taxLot.setClosed(false);
