@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/market-data/**").permitAll()
                         .requestMatchers("/api/valuations/**").permitAll()
                         .requestMatchers("/api/tax-lots/**").permitAll()
+                        .requestMatchers("/api/projections/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))

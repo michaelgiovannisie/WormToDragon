@@ -14,6 +14,8 @@ public interface HoldingRepository extends JpaRepository<Holding, UUID> {
 
     Optional<Holding> findByAccountIdAndAssetId(UUID accountId, UUID assetId);
 
+    void deleteByAccountIdAndAssetId(UUID accountId, UUID assetId);
+
     List<Holding> findByAccountId(UUID accountId);
 
     List<Holding> findByAccountIdAndActiveTrue(UUID accountId);

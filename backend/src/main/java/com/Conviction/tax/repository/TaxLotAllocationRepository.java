@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -41,5 +42,16 @@ public interface TaxLotAllocationRepository
         """)
     List<TaxLotAllocation> findByAssetSymbolWithDetails(
             @Param("symbol") String symbol
+    );
+
+    @Modifying
+    @Query("""
+        DELETE FROM TaxLotAllocation allocation
+        WHERE allocation.taxLot.account.id = :accountId
+        AND allocation.taxLot.asset.id = :assetId
+        """)
+    void deleteByAccountIdAndAssetId(
+            @Param("accountId") UUID accountId,
+            @Param("assetId") UUID assetId
     );
 }

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,5 +30,16 @@ public interface TaxLotRepository extends JpaRepository<TaxLot, UUID> {
         """)
     List<TaxLot> findByAssetSymbolWithDetails(
             @Param("symbol") String symbol
+    );
+
+    @Modifying
+    @Query("""
+        DELETE FROM TaxLot lot
+        WHERE lot.account.id = :accountId
+        AND lot.asset.id = :assetId
+        """)
+    void deleteByAccountIdAndAssetId(
+            @Param("accountId") UUID accountId,
+            @Param("assetId") UUID assetId
     );
 }

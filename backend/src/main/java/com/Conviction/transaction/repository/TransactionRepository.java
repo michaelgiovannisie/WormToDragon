@@ -64,7 +64,7 @@ public interface TransactionRepository
                 LocalDate transactionDate
         );
 
-        @Query("""
+    @Query("""
         SELECT t
         FROM Transaction t
         LEFT JOIN FETCH t.asset
@@ -73,5 +73,19 @@ public interface TransactionRepository
         """)
         List<Transaction> findByAccountIdWithAssetAndAccount(
                 @Param("accountId") UUID accountId
+        );
+
+    @Query("""
+        SELECT t
+        FROM Transaction t
+        JOIN FETCH t.account
+        JOIN FETCH t.asset
+        WHERE t.account.id = :accountId
+        AND t.asset.id = :assetId
+        ORDER BY t.transactionDate ASC, t.createdAt ASC
+        """)
+        List<Transaction> findByAccountIdAndAssetIdForReplay(
+                @Param("accountId") UUID accountId,
+                @Param("assetId") UUID assetId
         );
 }

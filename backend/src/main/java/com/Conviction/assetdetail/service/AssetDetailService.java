@@ -1,14 +1,12 @@
 package com.conviction.assetdetail.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
 import com.conviction.assetdetail.dto.AssetDetailResponse;
 import com.conviction.holding.dto.HoldingResponse;
-import com.conviction.holding.entity.Holding;
+import com.conviction.holding.mapper.HoldingMapper;
 import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.tax.dto.TaxLotAllocationResponse;
 import com.conviction.tax.dto.TaxLotResponse;
@@ -25,6 +23,7 @@ import com.conviction.valuation.repository.ValuationScenarioRepository;
 public class AssetDetailService {
 
     private final HoldingRepository holdingRepository;
+    private final HoldingMapper holdingMapper;
     private final TransactionService transactionService;
     private final ValuationScenarioRepository valuationScenarioRepository;
     private final TransactionRepository transactionRepository;
@@ -34,6 +33,7 @@ public class AssetDetailService {
 
     public AssetDetailService(
         HoldingRepository holdingRepository,
+        HoldingMapper holdingMapper,
         TransactionService transactionService,
         ValuationScenarioRepository valuationScenarioRepository,
         TransactionRepository transactionRepository,
@@ -42,38 +42,13 @@ public class AssetDetailService {
         TaxLotMapper taxLotMapper
     ) {
         this.holdingRepository = holdingRepository;
+        this.holdingMapper = holdingMapper;
         this.transactionService = transactionService;
         this.valuationScenarioRepository = valuationScenarioRepository;
         this.transactionRepository = transactionRepository;
         this.taxLotRepository = taxLotRepository;
         this.allocationRepository = allocationRepository;
         this.taxLotMapper = taxLotMapper;
-    }
-
-    private HoldingResponse toHoldingResponse(Holding holding) {
-        return new HoldingResponse(
-                holding.getId(),
-                holding.getAccount().getId(),
-                holding.getAsset().getId(),
-                holding.getAsset().getSymbol(),
-                holding.getAsset().getName(),
-                holding.getQuantityHeld(),
-                holding.getTotalCostBasis(),
-                holding.getQuantityHeld().compareTo(BigDecimal.ZERO) == 0
-                        ? BigDecimal.ZERO
-                        : holding.getTotalCostBasis()
-                                .divide(holding.getQuantityHeld(), 2, RoundingMode.HALF_UP),
-                holding.getMarketPrice(),
-                holding.getMarketValue(),
-                holding.getUnrealizedGain(),
-                holding.getTotalCostBasis().compareTo(BigDecimal.ZERO) == 0
-                        ? BigDecimal.ZERO
-                        : holding.getUnrealizedGain()
-                                .divide(holding.getTotalCostBasis(), 4, RoundingMode.HALF_UP)
-                                .multiply(BigDecimal.valueOf(100)),
-                holding.getActive(),
-                holding.getLastCalculatedAt()
-        );
     }
 
     public AssetDetailResponse getAssetDetail(String symbol) {
@@ -93,7 +68,7 @@ public class AssetDetailService {
                     .findActiveByAssetSymbolWithAssetAndAccount(symbol)
                     .stream()
                     .findFirst()
-                    .map(this::toHoldingResponse)
+                    .map(holdingMapper::toResponse)
                     .orElse(null);
 
         List<TaxLotResponse> taxLots =
