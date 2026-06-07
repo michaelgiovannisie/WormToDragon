@@ -88,6 +88,42 @@ export default function Research() {
       .then(r => r.json()).then(setDcaRecs).catch(console.error);
   };
 
+  const [syncing, setSyncing]     = useState(false);
+  const [syncMsg, setSyncMsg]     = useState<string | null>(null);
+
+  const syncFromFMP = async () => {
+    if (!symbol) return;
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch(`${API}/fmp/${symbol}/sync-all`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setSyncMsg(`Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated.`);
+      // Reload prices and detail
+      const [newPrices, newDetail] = await Promise.all([
+        fetch(`${API}/historical-prices/${symbol}`).then(r => r.json()),
+        fetch(`${API}/assets/${symbol}/detail`).then(r => r.json()),
+      ]);
+      setPrices(newPrices);
+      setDetail(newDetail);
+      // Pre-fill valuation form with fresh metrics
+      if (data.metrics) {
+        setFormVals(prev => ({
+          ...prev,
+          earningsPerShare: data.metrics.epsTTM != null ? String(data.metrics.epsTTM) : prev.earningsPerShare,
+          currentPrice: data.profile?.holding?.marketPrice != null
+            ? String(data.profile.holding.marketPrice)
+            : prev.currentPrice,
+        }));
+      }
+    } catch (e: any) {
+      setSyncMsg("Sync failed: " + e.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleRunValuation = async () => {
     if (!symbol) return;
     setSubmitting(true);
@@ -236,11 +272,23 @@ export default function Research() {
               <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{detail.assetName}</p>
               <h1 style={{ fontSize: "56px", margin: "4px 0 0", lineHeight: 1 }}>{detail.symbol}</h1>
             </div>
-            <button onClick={clearSymbol}
-              style={{ background: "transparent", color: C.muted, border: `1px solid ${C.borderSubtle}`,
-                borderRadius: "999px", padding: "8px 18px", cursor: "pointer", fontFamily: C.font, fontSize: "13px" }}>
-              ✕ Clear
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={syncFromFMP} disabled={syncing}
+                  style={{ background: syncing ? "rgba(200,169,106,0.08)" : "rgba(200,169,106,0.15)",
+                    color: C.gold, border: `1px solid rgba(200,169,106,0.4)`,
+                    borderRadius: "999px", padding: "8px 18px", cursor: syncing ? "wait" : "pointer",
+                    fontFamily: C.font, fontSize: "13px" }}>
+                  {syncing ? "Syncing…" : "⟳ Sync from FMP"}
+                </button>
+                <button onClick={clearSymbol}
+                  style={{ background: "transparent", color: C.muted, border: `1px solid ${C.borderSubtle}`,
+                    borderRadius: "999px", padding: "8px 18px", cursor: "pointer", fontFamily: C.font, fontSize: "13px" }}>
+                  ✕ Clear
+                </button>
+              </div>
+              {syncMsg && <p style={{ color: syncMsg.startsWith("Sync failed") ? C.red : C.green, fontSize: "12px", margin: 0 }}>{syncMsg}</p>}
+            </div>
           </div>
 
           {/* Metric cards */}

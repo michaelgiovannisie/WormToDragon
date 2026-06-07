@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/projections/**").permitAll()
                         .requestMatchers("/api/historical-prices/**").permitAll()
                         .requestMatchers("/api/dca/**").permitAll()
+                        .requestMatchers("/api/fmp/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))
