@@ -29,9 +29,7 @@ public class ValuationService {
         return scenarioRepository.findBySymbolOrderByCreatedAtDesc(symbol);
     }
 
-    public ValuationResponse calculateIntrinsicValue(
-            ValuationRequest request
-    ) {
+    private ValuationResponse calculate(ValuationRequest request) {
         BigDecimal growthRate = request.growthRatePercent()
                 .divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP);
 
@@ -62,15 +60,31 @@ public class ValuationService {
         String valuationLabel;
 
         if (marginOfSafetyPercent.compareTo(BigDecimal.valueOf(20)) >= 0) {
-            valuationLabel = "UNDERVALUED";
+                valuationLabel = "UNDERVALUED";
         } else if (marginOfSafetyPercent.compareTo(BigDecimal.valueOf(-10)) >= 0) {
-            valuationLabel = "FAIRLY_VALUED";
+                valuationLabel = "FAIRLY_VALUED";
         } else {
-            valuationLabel = "OVERVALUED";
+                valuationLabel = "OVERVALUED";
         }
 
-        ValuationScenario scenario = new ValuationScenario();
+        return new ValuationResponse(
+                request.symbol(),
+                request.modelType(),
+                request.caseType(),
+                request.currentPrice(),
+                request.growthRatePercent(),
+                request.discountRatePercent(),
+                request.years(),
+                request.terminalMultiple(),
+                intrinsicValue,
+                marginOfSafetyPercent,
+                valuationLabel
+        );
+        }
 
+    public ValuationResponse calculateIntrinsicValue(ValuationRequest request) {
+        ValuationResponse response = calculate(request);
+        ValuationScenario scenario = new ValuationScenario();
         scenario.setSymbol(request.symbol());
         scenario.setModelType(request.modelType());
         scenario.setCaseType(request.caseType());
@@ -80,34 +94,18 @@ public class ValuationService {
         scenario.setDiscountRatePercent(request.discountRatePercent());
         scenario.setYears(request.years());
         scenario.setTerminalMultiple(request.terminalMultiple());
-        scenario.setIntrinsicValue(intrinsicValue);
-        scenario.setMarginOfSafetyPercent(marginOfSafetyPercent);
-        scenario.setValuationLabel(valuationLabel);
-
+        scenario.setIntrinsicValue(response.intrinsicValue());
+        scenario.setMarginOfSafetyPercent(response.marginOfSafetyPercent());
+        scenario.setValuationLabel(response.valuationLabel());
         scenarioRepository.save(scenario);
-
-        return new ValuationResponse(
-                request.symbol(),
-                request.modelType(),
-                request.caseType(),
-                request.currentPrice(),
-
-                request.growthRatePercent(),
-                request.discountRatePercent(),
-                request.years(),
-                request.terminalMultiple(),
-
-                intrinsicValue,
-                marginOfSafetyPercent,
-                valuationLabel
-        );
-    }
+        return response;
+        }
 
     public List<ValuationResponse> calculatePresets(
             ValuationPresetRequest request
     ) {
         return List.of(
-                calculateIntrinsicValue(
+                calculate(
                         new ValuationRequest(
                                 request.symbol(),
                                 ValuationModelType.EPS_MULTIPLE,
@@ -120,7 +118,7 @@ public class ValuationService {
                                 BigDecimal.valueOf(16)
                         )
                 ),
-                calculateIntrinsicValue(
+                calculate(
                         new ValuationRequest(
                                 request.symbol(),
                                 ValuationModelType.EPS_MULTIPLE,
@@ -133,7 +131,7 @@ public class ValuationService {
                                 BigDecimal.valueOf(22)
                         )
                 ),
-                calculateIntrinsicValue(
+                calculate(
                         new ValuationRequest(
                                 request.symbol(),
                                 ValuationModelType.EPS_MULTIPLE,
