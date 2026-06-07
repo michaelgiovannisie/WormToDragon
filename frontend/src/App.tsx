@@ -33,9 +33,10 @@ function App() {
   const [holdings, setHoldings] = useState<any[]>([]);
   const [performance, setPerformance] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [valuation, setValuation] = useState<any>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [assetDetail, setAssetDetail] = useState<any>(null);
+  const [targetMarginOfSafetyPercent, setTargetMarginOfSafetyPercent] =
+    useState(25);
 
   useEffect(() => {
     fetch(
@@ -69,11 +70,6 @@ function App() {
       .then((data) => setTransactions(data))
       .catch(console.error);
 
-    fetch("http://localhost:8080/api/valuations/AAPL/scenarios")
-      .then((response) => response.json())
-      .then((data) => setValuation(data[0] ?? null))
-      .catch(console.error);
-
   }, []);
 
   useEffect(() => {
@@ -81,14 +77,102 @@ function App() {
       return;
     }
 
+    setAssetDetail(null);
+
     fetch(`http://localhost:8080/api/assets/${selectedSymbol}/detail`)
       .then((response) => response.json())
       .then((data) => setAssetDetail(data))
       .catch(console.error);
   }, [selectedSymbol]);
 
+  const portfolioTrendData =
+    performance.length > 0
+      ? performance.map((snapshot) => ({
+          date: snapshot.snapshotDate,
+          totalMarketValue: Number(snapshot.totalMarketValue ?? 0)
+        }))
+      : portfolioData.map((point) => ({
+          date: point.month,
+          totalMarketValue: point.value
+        }));
+
+  if (selectedSymbol && !assetDetail) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0B1020",
+          color: "#F5F1E8",
+          fontFamily: "Georgia, serif",
+          padding: "48px"
+        }}
+      >
+        <button
+          onClick={() => setSelectedSymbol(null)}
+          style={{
+            background: "transparent",
+            color: "#C8A96A",
+            border: "1px solid rgba(200,169,106,0.35)",
+            borderRadius: "999px",
+            padding: "10px 18px",
+            cursor: "pointer"
+          }}
+        >
+          ← Back to Dashboard
+        </button>
+
+        <p
+          style={{
+            color: "#C8A96A",
+            letterSpacing: "0.3em",
+            fontSize: "12px",
+            textTransform: "uppercase",
+            marginTop: "48px"
+          }}
+        >
+          Asset Detail
+        </p>
+
+        <h1 style={{ fontSize: "48px", marginTop: "16px" }}>
+          Loading {selectedSymbol}...
+        </h1>
+      </div>
+    );
+  }
+
   if (selectedSymbol && assetDetail) {
-  const latestValuation = assetDetail.valuationScenarios?.[0];
+  const valuationScenarios = assetDetail.valuationScenarios ?? [];
+
+  const bearCase = assetDetail.valuationScenarios?.find(
+  (scenario: any) => scenario.caseType === "BEAR"
+  );
+
+  const baseCase = assetDetail.valuationScenarios?.find(
+    (scenario: any) => scenario.caseType === "BASE"
+  );
+
+  const bullCase = assetDetail.valuationScenarios?.find(
+    (scenario: any) => scenario.caseType === "BULL"
+  );
+
+  const latestValuation = baseCase ?? valuationScenarios[0];
+
+  const buyBelowPrice =
+    latestValuation?.intrinsicValue == null
+      ? 0
+      : Number(latestValuation.intrinsicValue) *
+        (1 - targetMarginOfSafetyPercent / 100);
+
+  const recentValuationScenarios = valuationScenarios.slice(0, 5);
+
+  const valuationTrendData =
+    [...recentValuationScenarios]
+      .reverse()
+      .map((scenario: any) => ({
+        date: new Date(scenario.createdAt).toLocaleDateString(),
+        intrinsicValue: Number(scenario.intrinsicValue ?? 0),
+        caseType: scenario.caseType ?? "-"
+      }));
 
   return (
     <div
@@ -148,16 +232,16 @@ function App() {
             `$${Number(assetDetail.holding?.marketValue ?? 0).toFixed(2)}`
           ],
           [
-            "Unrealized Gain",
-            `$${Number(assetDetail.holding?.unrealizedGain ?? 0).toFixed(2)}`
-          ],
-          [
             "Intrinsic Value",
             `$${Number(latestValuation?.intrinsicValue ?? 0).toFixed(2)}`
           ],
           [
-            "MOS",
+            "Current MOS",
             `${Number(latestValuation?.marginOfSafetyPercent ?? 0).toFixed(2)}%`
+          ],
+          [
+            `Buy Below (${targetMarginOfSafetyPercent}% MOS)`,
+            `$${buyBelowPrice.toFixed(2)}`
           ]
         ].map(([label, value]) => (
           <div
@@ -172,8 +256,117 @@ function App() {
             <p style={{ color: "#9C927D", fontSize: "14px" }}>{label}</p>
             <h3 style={{ fontSize: "30px", marginTop: "16px" }}>{value}</h3>
           </div>
-          ))}
-        </section>
+        ))}
+      </section>
+
+    <section
+      style={{
+        marginTop: "48px",
+        background: "#11182A",
+        border: "1px solid rgba(200,169,106,0.25)",
+        borderRadius: "24px",
+        padding: "32px"
+      }}
+    >
+      <p
+        style={{
+          color: "#C8A96A",
+          letterSpacing: "0.15em",
+          textTransform: "uppercase",
+          fontSize: "12px"
+        }}
+      >
+        Valuation Range
+      </p>
+
+      <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+        Bear / Base / Bull
+      </h3>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          marginTop: "12px"
+        }}
+      >
+        <label style={{ color: "#9C927D" }}>
+          Target MOS
+        </label>
+
+        <input
+          type="number"
+          min="0"
+          max="90"
+          value={targetMarginOfSafetyPercent}
+          onChange={(event) =>
+            setTargetMarginOfSafetyPercent(Number(event.target.value))
+          }
+          style={{
+            width: "90px",
+            background: "#0B1020",
+            color: "#F5F1E8",
+            border: "1px solid rgba(200,169,106,0.35)",
+            borderRadius: "10px",
+            padding: "8px 10px"
+          }}
+        />
+
+        <span style={{ color: "#9C927D" }}>%</span>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "24px",
+          marginTop: "28px"
+        }}
+      >
+        {[
+          ["Bear Case", bearCase],
+          ["Base Case", baseCase],
+          ["Bull Case", bullCase]
+        ].map(([label, scenario]: any) => (
+          <div
+            key={label}
+            style={{
+              border: "1px solid rgba(200,169,106,0.18)",
+              borderRadius: "18px",
+              padding: "24px"
+            }}
+          >
+            <p style={{ color: "#9C927D", fontSize: "14px" }}>
+              {label}
+            </p>
+
+            <h4 style={{ fontSize: "28px", marginTop: "12px" }}>
+              ${Number(scenario?.intrinsicValue ?? 0).toFixed(2)}
+            </h4>
+
+            <p style={{ color: "#9C927D", marginTop: "12px" }}>
+              MOS: {Number(scenario?.marginOfSafetyPercent ?? 0).toFixed(2)}%
+            </p>
+
+            <p style={{ color: "#9C927D", marginTop: "8px" }}>
+              Buy Below: $
+              {(
+                Number(scenario?.intrinsicValue ?? 0) *
+                (1 - targetMarginOfSafetyPercent / 100)
+              ).toFixed(2)}
+            </p>
+
+            <p style={{ color: "#9C927D", marginTop: "8px", fontSize: "13px" }}>
+              Growth {scenario?.growthRatePercent ?? "-"}% · Discount{" "}
+              {scenario?.discountRatePercent ?? "-"}% · Multiple{" "}
+              {scenario?.terminalMultiple ?? "-"}x
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+
         <section
           style={{
             marginTop: "48px",
@@ -226,7 +419,30 @@ function App() {
                   <td style={{ padding: "18px 0" }}>
                     {transaction.transactionDate}
                   </td>
-                  <td>{transaction.transactionType}</td>
+                  <td>
+                    <span
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "999px",
+                        fontSize: "12px",
+                        letterSpacing: "0.08em",
+                        background:
+                          transaction.transactionType === "BUY"
+                            ? "rgba(127,176,105,0.15)"
+                            : transaction.transactionType === "SELL"
+                            ? "rgba(201,112,100,0.15)"
+                            : "rgba(200,169,106,0.15)",
+                        color:
+                          transaction.transactionType === "BUY"
+                            ? "#8FD694"
+                            : transaction.transactionType === "SELL"
+                            ? "#E06C75"
+                            : "#C8A96A"
+                      }}
+                    >
+                      {transaction.transactionType}
+                    </span>
+                  </td>
                   <td>{transaction.quantity}</td>
                   <td>${Number(transaction.pricePerUnit).toFixed(2)}</td>
                   <td>${Number(transaction.realizedGain).toFixed(2)}</td>
@@ -256,6 +472,34 @@ function App() {
           </p>
 
           <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
+            Intrinsic Value Over Time
+          </h3>
+
+          <div style={{ height: "280px", marginTop: "32px" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={valuationTrendData}>
+                <CartesianGrid stroke="rgba(200,169,106,0.12)" />
+                <XAxis dataKey="date" stroke="#9C927D" />
+                <YAxis stroke="#9C927D" />
+                <Tooltip
+                  contentStyle={{
+                    background: "#0B1020",
+                    border: "1px solid rgba(200,169,106,0.25)",
+                    color: "#F5F1E8"
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="intrinsicValue"
+                  stroke="#C8A96A"
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <h3 style={{ fontSize: "24px", marginTop: "40px" }}>
             Saved Scenarios
           </h3>
 
@@ -269,14 +513,16 @@ function App() {
             <thead>
               <tr style={{ color: "#9C927D", textAlign: "left" }}>
                 <th>Date</th>
+                <th>Case</th>
                 <th>Intrinsic Value</th>
                 <th>MOS</th>
+                <th>Assumptions</th>
                 <th>Label</th>
               </tr>
             </thead>
 
             <tbody>
-              {assetDetail.valuationScenarios.map((scenario: any) => (
+              {recentValuationScenarios.map((scenario: any) => (
                 <tr
                   key={scenario.id}
                   style={{
@@ -286,8 +532,14 @@ function App() {
                   <td style={{ padding: "18px 0" }}>
                     {new Date(scenario.createdAt).toLocaleDateString()}
                   </td>
+                  <td>{scenario.caseType ?? "-"}</td>
                   <td>${Number(scenario.intrinsicValue).toFixed(2)}</td>
                   <td>{Number(scenario.marginOfSafetyPercent).toFixed(2)}%</td>
+                  <td>
+                    Growth {scenario.growthRatePercent ?? "-"}% / Discount{" "}
+                    {scenario.discountRatePercent ?? "-"}% / Multiple{" "}
+                    {scenario.terminalMultiple ?? "-"}x
+                  </td>
                   <td>{scenario.valuationLabel}</td>
                 </tr>
               ))}
@@ -476,13 +728,13 @@ function App() {
           </div>
 
           <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={performance.length > 0 ? performance : portfolioData}>
+            <LineChart data={portfolioTrendData}>
               <CartesianGrid
                 stroke="rgba(200,169,106,0.08)"
                 vertical={false}
               />
 
-              <XAxis dataKey="snapshotDate" stroke="#9C927D" />
+              <XAxis dataKey="date" stroke="#9C927D" />
 
               <YAxis
                 stroke="#9C927D"
@@ -585,67 +837,6 @@ function App() {
               fontSize: "12px"
             }}
           >
-            Valuation Lab
-          </p>
-
-          <h3 style={{ fontSize: "28px", marginTop: "8px" }}>
-            Margin of Safety
-          </h3>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "24px",
-              marginTop: "28px"
-            }}
-          >
-            {[
-              [
-                "Intrinsic Value",
-                `$${Number(valuation?.intrinsicValue ?? 0).toFixed(2)}`
-              ],
-              [
-                "Margin of Safety",
-                `${Number(valuation?.marginOfSafetyPercent ?? 0).toFixed(2)}%`
-              ],
-              [
-                "Valuation",
-                valuation?.valuationLabel ?? "-"
-              ]
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                style={{
-                  border: "1px solid rgba(200,169,106,0.18)",
-                  borderRadius: "18px",
-                  padding: "24px"
-                }}
-              >
-                <p style={{ color: "#9C927D", fontSize: "14px" }}>{label}</p>
-                <h4 style={{ fontSize: "26px", marginTop: "12px" }}>{value}</h4>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section
-          style={{
-            marginTop: "48px",
-            background: "#11182A",
-            border: "1px solid rgba(200,169,106,0.25)",
-            borderRadius: "24px",
-            padding: "32px"
-          }}
-        >
-          <p
-            style={{
-              color: "#C8A96A",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              fontSize: "12px"
-            }}
-          >
             Holdings
           </p>
 
@@ -663,7 +854,7 @@ function App() {
             <thead>
               <tr style={{ color: "#9C927D", textAlign: "left" }}>
                 <th>Symbol</th>
-                <th>Shares</th>
+                <th>Quantity</th>
                 <th>Avg Cost</th>
                 <th>Market Value</th>
                 <th>Unrealized Gain</th>
@@ -695,7 +886,7 @@ function App() {
                   <td
                   style={{
                     color:
-                      Number(holding.unrealizedGain) < 0
+                      Number(holding.unrealizedGain) >= 0
                         ? "#8FD694"
                         : "#E06C75"
                   }}
