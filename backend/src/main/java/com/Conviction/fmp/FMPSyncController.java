@@ -34,12 +34,16 @@ public class FMPSyncController {
 
     /** Fetch and store EOD OHLCV history. Optional from/to to limit range. */
     @PostMapping("/{symbol}/sync-history")
-    public List<HistoricalPriceResponse> syncHistory(
+    public org.springframework.http.ResponseEntity<?> syncHistory(
             @PathVariable String symbol,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        return historicalSync.sync(symbol.toUpperCase(), from, to);
+        try {
+            return org.springframework.http.ResponseEntity.ok(historicalSync.sync(symbol.toUpperCase(), from, to));
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.status(500).body(e.getMessage() + (e.getCause() != null ? " | cause: " + e.getCause().getMessage() : ""));
+        }
     }
 
     /** Fetch company profile and update asset name, exchange, sector, industry, marketCap, P/E. */

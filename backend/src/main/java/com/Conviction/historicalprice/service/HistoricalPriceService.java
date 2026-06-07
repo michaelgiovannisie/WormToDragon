@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.conviction.asset.entity.Asset;
 import com.conviction.asset.repository.AssetRepository;
@@ -57,6 +58,7 @@ public class HistoricalPriceService {
                 ));
     }
 
+    @Transactional
     public HistoricalPriceResponse upsert(
             String symbol,
             UpsertHistoricalPriceRequest request
@@ -86,6 +88,7 @@ public class HistoricalPriceService {
         return toResponse(priceRepository.save(price));
     }
 
+    @Transactional
     public List<HistoricalPriceResponse> upsertBatch(
             String symbol,
             List<UpsertHistoricalPriceRequest> requests

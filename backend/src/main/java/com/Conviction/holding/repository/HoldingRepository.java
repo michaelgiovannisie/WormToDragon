@@ -41,6 +41,7 @@ public interface HoldingRepository extends JpaRepository<Holding, UUID> {
         JOIN FETCH a.portfolio
         WHERE a.portfolio.id = :portfolioId
         AND h.active = true
+        AND h.quantityHeld > 0.001
         """)
     List<Holding> findActiveByPortfolioIdWithAssetAndAccount(
             @Param("portfolioId") UUID portfolioId

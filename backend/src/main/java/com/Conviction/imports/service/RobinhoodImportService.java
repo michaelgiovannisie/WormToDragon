@@ -1,6 +1,7 @@
 package com.conviction.imports.service;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -61,6 +62,7 @@ public class RobinhoodImportService {
         List<ImportedTransactionRow> importedRows = rows.stream()
                 .map(mapper::map)
                 .filter(r -> r != null)
+                .sorted(Comparator.comparing(ImportedTransactionRow::transactionDate))
                 .toList();
 
         Account account = accountRepository.findById(accountId)

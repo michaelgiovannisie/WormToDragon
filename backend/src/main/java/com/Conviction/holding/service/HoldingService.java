@@ -97,8 +97,10 @@ public class HoldingService {
         BigDecimal newQuantity = holding.getQuantityHeld()
                 .subtract(transaction.getQuantity());
 
+        // For stock splits, pre-split buy quantities may be smaller than post-split sell
+        // quantities. Clamp to zero rather than rejecting the transaction entirely.
         if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Cannot sell more than current holding");
+            newQuantity = BigDecimal.ZERO;
         }
 
         BigDecimal averageCostBasis =

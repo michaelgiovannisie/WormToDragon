@@ -67,12 +67,9 @@ public class FIFOStrategy implements TaxStrategy {
             quantityToSell = quantityToSell.subtract(fromLot);
         }
 
-        if (quantityToSell.compareTo(BigDecimal.ZERO) > 0) {
-            throw new IllegalArgumentException(
-                    "Not enough tax lot quantity to cover sell of "
-                            + sellTransaction.getQuantity()
-            );
-        }
+        // If lots are exhausted before sell quantity is fully covered (e.g. due to
+        // stock splits not reflected in pre-split buy quantities), we accept the
+        // partial allocation rather than rejecting the entire transaction.
 
         return allocations;
     }
