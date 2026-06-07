@@ -4,13 +4,19 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorColumn;
+import jakarta.persistence.DiscriminatorType;
+import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,6 +28,9 @@ import lombok.Setter;
 @AllArgsConstructor
 @Entity
 @Table(name = "assets")
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "asset_type", discriminatorType = DiscriminatorType.STRING)
+@DiscriminatorValue("ASSET")
 public class Asset {
 
     @Id
@@ -34,9 +43,6 @@ public class Asset {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
-    private String assetType;
-
     private String exchange;
 
     private String currency = "USD";
@@ -47,6 +53,14 @@ public class Asset {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    @Transient
+    public String getAssetType() {
+        if (this instanceof Equity)  return "EQUITY";
+        if (this instanceof ETF)     return "ETF";
+        if (this instanceof Crypto)  return "CRYPTO";
+        return "ASSET";
+    }
 
     @PrePersist
     public void prePersist() {

@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.conviction.account.entity.Account;
 import com.conviction.account.repository.AccountRepository;
 import com.conviction.asset.entity.Asset;
+import com.conviction.asset.entity.Equity;
 import com.conviction.asset.repository.AssetRepository;
 import com.conviction.imports.dto.ImportResultResponse;
 import com.conviction.imports.dto.ImportedTransactionRow;
@@ -73,10 +74,9 @@ public class RobinhoodImportService {
                         .orElse(null);
 
                 if (asset == null) {
-                Asset newAsset = new Asset();
+                Equity newAsset = new Equity();
                 newAsset.setSymbol(row.symbol());
                 newAsset.setName(row.assetName());
-                newAsset.setAssetType("EQUITY");
                 newAsset.setExchange("UNKNOWN");
                 newAsset.setCurrency("USD");
 

@@ -27,6 +27,8 @@ export default function Research() {
   const [targetMos, setTargetMos]       = useState(25);
   const [showForm, setShowForm]         = useState(false);
   const [model, setModel]               = useState<Model>("DCF");
+  const [dcaRecs, setDcaRecs]           = useState<any[]>([]);
+  const [dcaCash, setDcaCash]           = useState("1000");
   const [formVals, setFormVals]         = useState({
     currentPrice: "", earningsPerShare: "", growthRatePercent: "",
     discountRatePercent: "", years: "10", terminalMultiple: "",
@@ -62,6 +64,9 @@ export default function Research() {
 
     fetch(`${API}/historical-prices/${symbol}`)
       .then(r => r.json()).then(setPrices).catch(console.error);
+
+    fetch(`${API}/dca/${symbol}/all?availableCash=${dcaCash}`)
+      .then(r => r.json()).then(setDcaRecs).catch(console.error);
   }, [symbol]);
 
   const selectSymbol = (s: string) => {
@@ -75,6 +80,12 @@ export default function Research() {
     setDetail(null);
     setPrices([]);
     setSearchParams({});
+  };
+
+  const refreshDCA = (cash: string) => {
+    if (!symbol) return;
+    fetch(`${API}/dca/${symbol}/all?availableCash=${cash}`)
+      .then(r => r.json()).then(setDcaRecs).catch(console.error);
   };
 
   const handleRunValuation = async () => {
@@ -369,6 +380,77 @@ export default function Research() {
                 </div>
               )}
             </div>
+          </section>
+
+          {/* DCA Recommendation */}
+          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
+              <div>
+                <p style={labelStyle}>DCA Intelligence</p>
+                <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Position Recommendation</h3>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <label style={{ color: C.muted, fontSize: "13px" }}>Available Cash ($)</label>
+                <input
+                  type="number" value={dcaCash}
+                  onChange={e => { setDcaCash(e.target.value); }}
+                  onBlur={e => refreshDCA(e.target.value)}
+                  style={{ width: "100px", background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
+                    borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
+              </div>
+            </div>
+
+            {dcaRecs.length === 0
+              ? <p style={{ color: C.muted }}>Run a valuation scenario first to unlock DCA recommendations.</p>
+              : <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px" }}>
+                  {dcaRecs.map((rec: any) => {
+                    const actionColor = rec.action === "BUY_MORE" ? C.green : rec.action === "REDUCE" ? C.red : C.gold;
+                    const stratLabel: Record<string, string> = {
+                      VALUE_FOCUSED:    "Value Focused",
+                      RISK_ADJUSTED:    "Risk Adjusted",
+                      AGGRESSIVE_GROWTH: "Aggressive Growth",
+                    };
+                    return (
+                      <div key={rec.strategyUsed} style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          {stratLabel[rec.strategyUsed] ?? rec.strategyUsed}
+                        </p>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                          <span style={{ padding: "4px 14px", borderRadius: "999px", fontSize: "12px", fontWeight: 700,
+                            background: rec.action === "BUY_MORE" ? "rgba(143,214,148,0.12)" : rec.action === "REDUCE" ? "rgba(224,108,117,0.12)" : "rgba(200,169,106,0.12)",
+                            color: actionColor }}>
+                            {rec.action.replace("_", " ")}
+                          </span>
+                          <span style={{ color: C.muted, fontSize: "12px" }}>
+                            {rec.confidenceScore}% confidence
+                          </span>
+                        </div>
+
+                        {rec.action === "BUY_MORE" && (
+                          <>
+                            <p style={{ color: C.text, fontSize: "22px", margin: "0 0 4px", fontWeight: 600 }}>
+                              ${Number(rec.suggestedAmount).toFixed(2)}
+                            </p>
+                            <p style={{ color: C.muted, fontSize: "13px", margin: "0 0 12px" }}>
+                              ≈ {Number(rec.suggestedQuantity).toFixed(4)} shares
+                            </p>
+                          </>
+                        )}
+
+                        <p style={{ color: C.muted, fontSize: "13px", lineHeight: "1.5", margin: 0 }}>
+                          {rec.rationale}
+                        </p>
+
+                        {/* Confidence bar */}
+                        <div style={{ marginTop: "16px", height: "4px", background: "rgba(200,169,106,0.1)", borderRadius: "2px" }}>
+                          <div style={{ height: "100%", width: `${rec.confidenceScore}%`, background: actionColor, borderRadius: "2px" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+            }
           </section>
 
           {/* Valuation History */}
