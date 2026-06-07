@@ -88,13 +88,32 @@ public class TransactionService {
                     .orElseThrow(() -> new IllegalArgumentException("Asset not found"));
         }
 
+        BigDecimal fees =
+                request.fees() == null ? BigDecimal.ZERO : request.fees();
+
+        if (asset != null &&
+                transactionRepository
+                        .existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndFeesAndTransactionDate(
+                                account.getId(),
+                                asset.getId(),
+                                request.transactionType(),
+                                request.quantity(),
+                                request.pricePerUnit(),
+                                fees,
+                                request.transactionDate()
+                        )) {
+            throw new IllegalArgumentException(
+                    "Duplicate transaction already exists"
+            );
+        }
+
         Transaction transaction = new Transaction();
         transaction.setAccount(account);
         transaction.setAsset(asset);
         transaction.setTransactionType(request.transactionType());
         transaction.setQuantity(request.quantity());
         transaction.setPricePerUnit(request.pricePerUnit());
-        transaction.setFees(request.fees() == null ? BigDecimal.ZERO : request.fees());
+        transaction.setFees(fees);
         transaction.setTransactionDate(request.transactionDate());
         transaction.setNotes(request.notes());
 

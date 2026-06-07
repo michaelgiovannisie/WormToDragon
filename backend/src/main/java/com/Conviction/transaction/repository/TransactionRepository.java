@@ -55,12 +55,13 @@ public interface TransactionRepository
                 @Param("symbol") String symbol
         );
 
-    boolean existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndTransactionDate(
+    boolean existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndFeesAndTransactionDate(
                 UUID accountId,
                 UUID assetId,
                 TransactionType transactionType,
                 BigDecimal quantity,
                 BigDecimal pricePerUnit,
+                BigDecimal fees,
                 LocalDate transactionDate
         );
 
