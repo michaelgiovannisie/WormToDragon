@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.conviction.valuation.enums.ValuationCaseType;
 import com.conviction.valuation.enums.ValuationModelType;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.conviction.asset.entity.Asset;
 
 import jakarta.persistence.Column;
@@ -40,6 +41,7 @@ public class ValuationScenario {
 
     private String symbol;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "asset_id")
     private Asset asset;

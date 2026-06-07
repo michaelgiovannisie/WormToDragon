@@ -24,6 +24,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/portfolios/**").permitAll()
                         .requestMatchers("/api/accounts/**").permitAll()
                         .requestMatchers("/api/assets/**").permitAll()
+                        .requestMatchers("/api/assets/*/detail").permitAll()
                         .requestMatchers("/api/transactions/**").permitAll()
                         .requestMatchers("/api/holdings/**").permitAll()
                         .requestMatchers("/api/holdings/*").permitAll()
