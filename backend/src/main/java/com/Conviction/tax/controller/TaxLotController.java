@@ -10,8 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.conviction.tax.dto.TaxLotAllocationResponse;
 import com.conviction.tax.dto.TaxLotResponse;
-import com.conviction.tax.entity.TaxLot;
-import com.conviction.tax.entity.TaxLotAllocation;
+import com.conviction.tax.mapper.TaxLotMapper;
 import com.conviction.tax.repository.TaxLotAllocationRepository;
 import com.conviction.tax.repository.TaxLotRepository;
 
@@ -21,13 +20,16 @@ public class TaxLotController {
 
     private final TaxLotRepository taxLotRepository;
     private final TaxLotAllocationRepository allocationRepository;
+    private final TaxLotMapper taxLotMapper;
     
     public TaxLotController(
             TaxLotRepository taxLotRepository,
-            TaxLotAllocationRepository allocationRepository
+            TaxLotAllocationRepository allocationRepository,
+            TaxLotMapper taxLotMapper
     ) {
         this.taxLotRepository = taxLotRepository;
         this.allocationRepository = allocationRepository;
+        this.taxLotMapper = taxLotMapper;
     }
 
     @GetMapping("/assets/{symbol}")
@@ -37,7 +39,7 @@ public class TaxLotController {
         return taxLotRepository
                 .findByAssetSymbolWithDetails(symbol.toUpperCase())
                 .stream()
-                .map(this::toResponse)
+                .map(taxLotMapper::toResponse)
                 .toList();
     }
 
@@ -48,7 +50,7 @@ public class TaxLotController {
         return allocationRepository
                 .findBySellTransactionIdWithDetails(sellTransactionId)
                 .stream()
-                .map(this::toAllocationResponse)
+                .map(taxLotMapper::toAllocationResponse)
                 .toList();
     }
 
@@ -59,42 +61,8 @@ public class TaxLotController {
         return allocationRepository
                 .findByAssetSymbolWithDetails(symbol.toUpperCase())
                 .stream()
-                .map(this::toAllocationResponse)
+                .map(taxLotMapper::toAllocationResponse)
                 .toList();
-    }
-
-    private TaxLotResponse toResponse(TaxLot lot) {
-        return new TaxLotResponse(
-                lot.getId(),
-                lot.getAccount().getId(),
-                lot.getAsset().getId(),
-                lot.getAsset().getSymbol(),
-                lot.getAsset().getName(),
-                lot.getBuyTransaction().getId(),
-                lot.getQuantityPurchased(),
-                lot.getQuantityRemaining(),
-                lot.getCostBasisPerUnit(),
-                lot.getTotalCostBasis(),
-                lot.getAcquisitionDate(),
-                lot.getClosed(),
-                lot.getCreatedAt()
-        );
-    }
-
-    private TaxLotAllocationResponse toAllocationResponse(
-            TaxLotAllocation allocation
-    ) {
-        return new TaxLotAllocationResponse(
-                allocation.getId(),
-                allocation.getSellTransaction().getId(),
-                allocation.getTaxLot().getId(),
-                allocation.getTaxLot().getBuyTransaction().getId(),
-                allocation.getQuantityAllocated(),
-                allocation.getProceeds(),
-                allocation.getCostBasis(),
-                allocation.getRealizedGain(),
-                allocation.getCreatedAt()
-        );
     }
 
 }

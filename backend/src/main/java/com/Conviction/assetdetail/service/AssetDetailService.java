@@ -12,8 +12,7 @@ import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.tax.dto.TaxLotAllocationResponse;
 import com.conviction.tax.dto.TaxLotResponse;
-import com.conviction.tax.entity.TaxLot;
-import com.conviction.tax.entity.TaxLotAllocation;
+import com.conviction.tax.mapper.TaxLotMapper;
 import com.conviction.tax.repository.TaxLotAllocationRepository;
 import com.conviction.tax.repository.TaxLotRepository;
 import com.conviction.transaction.dto.TransactionResponse;
@@ -31,6 +30,7 @@ public class AssetDetailService {
     private final TransactionRepository transactionRepository;
     private final TaxLotRepository taxLotRepository;
     private final TaxLotAllocationRepository allocationRepository;
+    private final TaxLotMapper taxLotMapper;
 
     public AssetDetailService(
         HoldingRepository holdingRepository,
@@ -38,14 +38,16 @@ public class AssetDetailService {
         ValuationScenarioRepository valuationScenarioRepository,
         TransactionRepository transactionRepository,
         TaxLotRepository taxLotRepository,
-        TaxLotAllocationRepository allocationRepository
+        TaxLotAllocationRepository allocationRepository,
+        TaxLotMapper taxLotMapper
     ) {
         this.holdingRepository = holdingRepository;
         this.transactionService = transactionService;
         this.valuationScenarioRepository = valuationScenarioRepository;
         this.transactionRepository = transactionRepository;
         this.taxLotRepository = taxLotRepository;
-        this.allocationRepository = allocationRepository;   
+        this.allocationRepository = allocationRepository;
+        this.taxLotMapper = taxLotMapper;
     }
 
     private HoldingResponse toHoldingResponse(Holding holding) {
@@ -98,14 +100,14 @@ public class AssetDetailService {
         taxLotRepository
                 .findByAssetSymbolWithDetails(symbol.toUpperCase())
                 .stream()
-                .map(this::toTaxLotResponse)
+                .map(taxLotMapper::toResponse)
                 .toList();
 
         List<TaxLotAllocationResponse> taxLotAllocations =
                 allocationRepository
                         .findByAssetSymbolWithDetails(symbol.toUpperCase())
                         .stream()
-                        .map(this::toTaxLotAllocationResponse)
+                        .map(taxLotMapper::toAllocationResponse)
                         .toList();
 
         return new AssetDetailResponse(
@@ -119,37 +121,4 @@ public class AssetDetailService {
         );
     }
 
-    private TaxLotResponse toTaxLotResponse(TaxLot lot) {
-    return new TaxLotResponse(
-            lot.getId(),
-            lot.getAccount().getId(),
-            lot.getAsset().getId(),
-            lot.getAsset().getSymbol(),
-            lot.getAsset().getName(),
-            lot.getBuyTransaction().getId(),
-            lot.getQuantityPurchased(),
-            lot.getQuantityRemaining(),
-            lot.getCostBasisPerUnit(),
-            lot.getTotalCostBasis(),
-            lot.getAcquisitionDate(),
-            lot.getClosed(),
-            lot.getCreatedAt()
-        );
-    }
-
-    private TaxLotAllocationResponse toTaxLotAllocationResponse(
-            TaxLotAllocation allocation
-    ) {
-        return new TaxLotAllocationResponse(
-                allocation.getId(),
-                allocation.getSellTransaction().getId(),
-                allocation.getTaxLot().getId(),
-                allocation.getTaxLot().getBuyTransaction().getId(),
-                allocation.getQuantityAllocated(),
-                allocation.getProceeds(),
-                allocation.getCostBasis(),
-                allocation.getRealizedGain(),
-                allocation.getCreatedAt()
-        );
-    }
 }
