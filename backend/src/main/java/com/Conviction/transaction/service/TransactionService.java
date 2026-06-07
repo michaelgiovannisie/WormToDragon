@@ -12,6 +12,7 @@ import com.conviction.account.repository.AccountRepository;
 import com.conviction.asset.entity.Asset;
 import com.conviction.asset.repository.AssetRepository;
 import com.conviction.holding.service.HoldingService;
+import com.conviction.tax.service.TaxLotService;
 import com.conviction.transaction.dto.CreateTransactionRequest;
 import com.conviction.transaction.dto.TransactionResponse;
 import com.conviction.transaction.entity.Transaction;
@@ -24,18 +25,21 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final AssetRepository assetRepository;
+    private final TaxLotService taxLotService;
     private final HoldingService holdingService;
 
     public TransactionService(
-            TransactionRepository transactionRepository,
-            AccountRepository accountRepository,
-            AssetRepository assetRepository,
-            HoldingService holdingService
-    ) {
+        TransactionRepository transactionRepository,
+        AccountRepository accountRepository,
+        AssetRepository assetRepository,
+        HoldingService holdingService,
+        TaxLotService taxLotService
+        ) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.assetRepository = assetRepository;
         this.holdingService = holdingService;
+        this.taxLotService = taxLotService;
     }
 
     public TransactionResponse createTransaction(CreateTransactionRequest request) {
@@ -93,11 +97,9 @@ public class TransactionService {
         transaction.setNotes(request.notes());
 
         Transaction savedTransaction = transactionRepository.save(transaction);
-
+        taxLotService.processTransaction(savedTransaction);
         holdingService.updateHoldingFromTransaction(savedTransaction);
-
         Transaction updatedTransaction = transactionRepository.save(savedTransaction);
-
         return toResponse(updatedTransaction);
     }
 
