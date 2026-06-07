@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.conviction.tax.entity.TaxLot;
 
@@ -15,4 +17,17 @@ public interface TaxLotRepository extends JpaRepository<TaxLot, UUID> {
     );
 
     boolean existsByBuyTransactionId(UUID buyTransactionId);
+
+    @Query("""
+        SELECT lot
+        FROM TaxLot lot
+        JOIN FETCH lot.account
+        JOIN FETCH lot.asset
+        JOIN FETCH lot.buyTransaction
+        WHERE lot.asset.symbol = :symbol
+        ORDER BY lot.acquisitionDate ASC, lot.createdAt ASC
+        """)
+    List<TaxLot> findByAssetSymbolWithDetails(
+            @Param("symbol") String symbol
+    );
 }
