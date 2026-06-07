@@ -60,6 +60,7 @@ public class RobinhoodImportService {
 
         List<ImportedTransactionRow> importedRows = rows.stream()
                 .map(mapper::map)
+                .filter(r -> r != null)
                 .toList();
 
         Account account = accountRepository.findById(accountId)

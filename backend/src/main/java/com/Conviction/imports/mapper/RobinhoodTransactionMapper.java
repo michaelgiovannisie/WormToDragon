@@ -7,28 +7,37 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Set;
 
 @Component
 public class RobinhoodTransactionMapper {
 
+    private static final Set<String> SKIP_CODES = Set.of(
+        "CDIV", "ACH", "INT", "DTAX", "AFEE", "DFEE", "RTP",
+        "GOLD", "FUTSWP", "CIL", "MRGC", "MISC", "WIRE", "JNLC", "JNLS"
+    );
+
+    /** Returns null for rows that should be skipped (non-trade activity). */
     public ImportedTransactionRow map(RobinhoodCsvRow row) {
+        String code = row.values().getOrDefault("Trans Code", "").trim().toUpperCase();
+        if (code.isEmpty() || SKIP_CODES.contains(code)) return null;
+
         String symbol = row.values().getOrDefault("Instrument", "").trim();
-        String assetName = row.values().getOrDefault("Description", "").trim();
-        TransactionType transactionType = mapTransactionType(row);
+        if (symbol.isEmpty()) return null;
 
-        BigDecimal quantity = new BigDecimal(
-                row.values().getOrDefault("Quantity", "0").trim()
-        );
+        TransactionType transactionType = mapTransactionType(code);
+        if (transactionType == null) return null;
 
-        BigDecimal pricePerUnit = new BigDecimal(
-                row.values().getOrDefault("Price", "0").trim()
-        );
+        BigDecimal quantity = parseMoney(row.values().getOrDefault("Quantity", "0"));
+        BigDecimal pricePerUnit = parseMoney(row.values().getOrDefault("Price", "0"));
 
-        LocalDate transactionDate = LocalDate.parse(
-                row.values().getOrDefault("Activity Date", "").trim()
-        );
+        String dateStr = row.values().getOrDefault("Activity Date", "").trim();
+        if (dateStr.isEmpty()) return null;
+        LocalDate transactionDate = LocalDate.parse(dateStr);
 
-        String notes = "Imported from Robinhood CSV";
+        // First line of description only (strip CUSIP line)
+        String rawDesc = row.values().getOrDefault("Description", symbol).trim();
+        String assetName = rawDesc.contains("\n") ? rawDesc.substring(0, rawDesc.indexOf('\n')).trim() : rawDesc;
 
         return new ImportedTransactionRow(
                 symbol,
@@ -37,23 +46,31 @@ public class RobinhoodTransactionMapper {
                 quantity,
                 pricePerUnit,
                 transactionDate,
-                notes
+                "Imported from Robinhood CSV"
         );
     }
 
-    public TransactionType mapTransactionType(RobinhoodCsvRow row) {
-        String code = row.values()
-                .getOrDefault("Trans Code", "")
-                .trim()
-                .toUpperCase();
-
+    private TransactionType mapTransactionType(String code) {
         return switch (code) {
             case "BUY" -> TransactionType.BUY;
             case "SELL" -> TransactionType.SELL;
             case "DIV", "DIVIDEND" -> TransactionType.DIVIDEND;
-            default -> throw new IllegalArgumentException(
-                    "Unsupported Robinhood transaction type: " + code
-            );
+            default -> null;
         };
+    }
+
+    private BigDecimal parseMoney(String raw) {
+        if (raw == null || raw.isBlank()) return BigDecimal.ZERO;
+        // Strip $, commas, parentheses (negatives shown as "(123.45)")
+        String cleaned = raw.trim()
+                .replace("$", "")
+                .replace(",", "")
+                .replace("(", "-")
+                .replace(")", "");
+        try {
+            return new BigDecimal(cleaned);
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
     }
 }
