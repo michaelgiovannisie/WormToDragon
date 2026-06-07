@@ -52,6 +52,17 @@ public class TaxLotController {
                 .toList();
     }
 
+    @GetMapping("/assets/{symbol}/allocations")
+    public List<TaxLotAllocationResponse> getAllocationsByAsset(
+            @PathVariable String symbol
+    ) {
+        return allocationRepository
+                .findByAssetSymbolWithDetails(symbol.toUpperCase())
+                .stream()
+                .map(this::toAllocationResponse)
+                .toList();
+    }
+
     private TaxLotResponse toResponse(TaxLot lot) {
         return new TaxLotResponse(
                 lot.getId(),

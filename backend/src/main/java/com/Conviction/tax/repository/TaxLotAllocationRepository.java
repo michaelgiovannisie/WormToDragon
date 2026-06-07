@@ -28,4 +28,18 @@ public interface TaxLotAllocationRepository
     List<TaxLotAllocation> findBySellTransactionIdWithDetails(
             @Param("sellTransactionId") UUID sellTransactionId
     );
+    
+    @Query("""
+        SELECT allocation
+        FROM TaxLotAllocation allocation
+        JOIN FETCH allocation.sellTransaction sell
+        JOIN FETCH allocation.taxLot lot
+        JOIN FETCH lot.buyTransaction
+        JOIN FETCH lot.asset asset
+        WHERE asset.symbol = :symbol
+        ORDER BY sell.transactionDate DESC, allocation.createdAt DESC
+        """)
+    List<TaxLotAllocation> findByAssetSymbolWithDetails(
+            @Param("symbol") String symbol
+    );
 }
