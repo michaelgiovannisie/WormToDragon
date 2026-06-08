@@ -115,8 +115,7 @@ export default function Research() {
       const res = await fetch(`${API}/fmp/${symbol}/sync-all`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setSyncMsg(`Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated.`);
-      // Reload prices and detail
+      // Reload prices, detail, and financials in parallel
       const [newPrices, newDetail, newFin] = await Promise.all([
         fetch(`${API}/historical-prices/${symbol}`).then(r => r.json()),
         fetch(`${API}/assets/${symbol}/detail`).then(r => r.json()),
@@ -124,7 +123,12 @@ export default function Research() {
       ]);
       setPrices(Array.isArray(newPrices) ? newPrices : []);
       setDetail(newDetail);
-      setFinancials(newFin?.annual ?? []);
+      const finRows = newFin?.annual ?? [];
+      setFinancials(finRows);
+      const finStatus = finRows.length > 0
+        ? `financials OK (${finRows.length} years)`
+        : "financials unavailable (FMP quota exceeded)";
+      setSyncMsg(`Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, ${finStatus}.`);
       // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
       const eps = data.metrics?.epsTTM;
       const price = newDetail?.holding?.marketPrice;
@@ -304,7 +308,7 @@ export default function Research() {
                     color: C.gold, border: `1px solid rgba(200,169,106,0.4)`,
                     borderRadius: "999px", padding: "8px 18px", cursor: syncing ? "wait" : "pointer",
                     fontFamily: C.font, fontSize: "13px" }}>
-                  {syncing ? "Syncing…" : "⟳ Sync from FMP"}
+                  {syncing ? "Syncing…" : "⟳ Sync"}
                 </button>
                 <button onClick={clearSymbol}
                   style={{ background: "transparent", color: C.muted, border: `1px solid ${C.borderSubtle}`,
@@ -312,7 +316,12 @@ export default function Research() {
                   ✕ Clear
                 </button>
               </div>
-              {syncMsg && <p style={{ color: syncMsg.startsWith("Sync failed") ? C.red : C.green, fontSize: "12px", margin: 0 }}>{syncMsg}</p>}
+              {syncMsg && <p style={{
+                color: syncMsg.startsWith("Sync failed") ? C.red
+                     : syncMsg.includes("unavailable") ? C.gold
+                     : C.green,
+                fontSize: "12px", margin: 0
+              }}>{syncMsg}</p>}
             </div>
           </div>
 

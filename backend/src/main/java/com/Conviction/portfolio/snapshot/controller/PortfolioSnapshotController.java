@@ -41,7 +41,7 @@ public class PortfolioSnapshotController {
             @PathVariable UUID portfolioId
     ) {
         return snapshotRepository
-                .findByPortfolioIdOrderBySnapshotDateAsc(portfolioId)
+                .findByPortfolio_IdOrderBySnapshotDateAsc(portfolioId)
                 .stream()
                 .map(this::toResponse)
                 .toList();

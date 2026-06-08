@@ -1,9 +1,11 @@
 package com.conviction.portfolio.controller;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,8 +31,21 @@ public class PortfolioController {
         return portfolioService.createPortfolio(request);
     }
 
+    @GetMapping("/{portfolioId}")
+    public PortfolioResponse getPortfolio(@PathVariable UUID portfolioId) {
+        return portfolioService.getPortfolio(portfolioId);
+    }
+
     @GetMapping("/user/{userId}")
     public List<PortfolioResponse> getPortfoliosByUserId(@PathVariable UUID userId) {
         return portfolioService.getPortfoliosByUserId(userId);
+    }
+
+    @PatchMapping("/{portfolioId}/tax-strategy")
+    public PortfolioResponse updateTaxStrategy(
+            @PathVariable UUID portfolioId,
+            @RequestBody Map<String, String> body
+    ) {
+        return portfolioService.updateTaxStrategy(portfolioId, body.get("taxStrategy"));
     }
 }

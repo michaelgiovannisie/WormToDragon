@@ -50,6 +50,19 @@ public class PortfolioService {
         return toResponse(savedPortfolio);
     }
 
+    public PortfolioResponse getPortfolio(UUID portfolioId) {
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new IllegalArgumentException("Portfolio not found"));
+        return toResponse(portfolio);
+    }
+
+    public PortfolioResponse updateTaxStrategy(UUID portfolioId, String taxStrategy) {
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new IllegalArgumentException("Portfolio not found"));
+        portfolio.setTaxStrategy(taxStrategy);
+        return toResponse(portfolioRepository.save(portfolio));
+    }
+
     public List<PortfolioResponse> getPortfoliosByUserId(UUID userId) {
         return portfolioRepository.findByUserIdAndActiveTrue(userId)
                 .stream()

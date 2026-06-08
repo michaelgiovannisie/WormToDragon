@@ -11,9 +11,9 @@ import com.conviction.portfolio.snapshot.PortfolioSnapshot;
 public interface PortfolioSnapshotRepository
         extends JpaRepository<PortfolioSnapshot, UUID> {
 
-    List<PortfolioSnapshot> findByPortfolioIdOrderBySnapshotDateAsc(UUID portfolioId);
+    List<PortfolioSnapshot> findByPortfolio_IdOrderBySnapshotDateAsc(UUID portfolioId);
 
-    List<PortfolioSnapshot> findByPortfolioIdAndSnapshotDateOrderByCreatedAtDesc(
+    List<PortfolioSnapshot> findByPortfolio_IdAndSnapshotDateOrderByCreatedAtDesc(
             UUID portfolioId,
             LocalDate snapshotDate
     );

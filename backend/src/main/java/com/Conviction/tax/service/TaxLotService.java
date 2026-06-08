@@ -44,8 +44,26 @@ public class TaxLotService {
             createLotFromBuy(transaction);
         }
         if (transaction.getTransactionType() == TransactionType.SELL) {
-            allocateSell(transaction, "FIFO");
+            allocateSell(transaction, resolvePortfolioStrategyName(transaction));
         }
+    }
+
+    /**
+     * Resolves the tax strategy name from the owning portfolio's configured
+     * taxStrategy field, falling back to FIFO if it's missing or unrecognized.
+     */
+    private String resolvePortfolioStrategyName(Transaction transaction) {
+        String configured = transaction.getAccount() == null
+                ? null
+                : transaction.getAccount().getPortfolio() == null
+                        ? null
+                        : transaction.getAccount().getPortfolio().getTaxStrategy();
+
+        if (configured == null || !strategies.containsKey(configured)) {
+            return "FIFO";
+        }
+
+        return configured;
     }
 
     @Transactional

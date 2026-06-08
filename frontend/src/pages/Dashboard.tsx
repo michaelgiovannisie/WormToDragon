@@ -16,6 +16,8 @@ export default function Dashboard() {
   const [syncing, setSyncing]           = useState(false);
   const [syncMsg, setSyncMsg]           = useState<string | null>(null);
   const [chartRange, setChartRange]     = useState("1y");
+  const [taxStrategy, setTaxStrategy]   = useState<string>("FIFO");
+  const [strategyMsg, setStrategyMsg]   = useState<string | null>(null);
 
   const RANGES = ["1w","1m","3m","ytd","1y","all"];
 
@@ -30,7 +32,26 @@ export default function Dashboard() {
       .then(r => r.json()).then(setTransactions).catch(console.error);
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    fetch(`${API}/portfolios/${PORTFOLIO_ID}`)
+      .then(r => r.json()).then(d => setTaxStrategy(d.taxStrategy ?? "FIFO")).catch(console.error);
+  }, []);
+
+  const updateTaxStrategy = async (strategy: string) => {
+    setTaxStrategy(strategy);
+    setStrategyMsg(null);
+    try {
+      await fetch(`${API}/portfolios/${PORTFOLIO_ID}/tax-strategy`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taxStrategy: strategy }),
+      });
+      setStrategyMsg(`Tax method set to ${strategy}. Rebuild positions to apply.`);
+    } catch {
+      setStrategyMsg("Failed to update tax strategy.");
+    }
+  };
 
   const handleRangeChange = (range: string) => {
     setChartRange(range);
@@ -86,7 +107,7 @@ export default function Dashboard() {
       <p style={{ color: C.muted, marginBottom: "24px" }}>
         A refined view of capital, conviction, and performance.
       </p>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
         <button
           onClick={syncAllPrices}
           disabled={syncing}
@@ -95,6 +116,20 @@ export default function Dashboard() {
           {syncing ? "Syncing..." : "⟳ Sync All Prices"}
         </button>
         {syncMsg && <span style={{ color: C.muted, fontSize: "13px" }}>{syncMsg}</span>}
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px", borderLeft: `1px solid ${C.border}`, paddingLeft: "16px" }}>
+          <span style={{ color: C.muted, fontSize: "13px" }}>Tax Method</span>
+          {["FIFO", "LIFO", "SPECIFIC_LOT"].map(s => (
+            <button key={s} onClick={() => updateTaxStrategy(s)} style={{
+              padding: "6px 14px", borderRadius: "999px", cursor: "pointer",
+              fontFamily: C.font, fontSize: "12px",
+              background: taxStrategy === s ? "rgba(200,169,106,0.15)" : "transparent",
+              color: taxStrategy === s ? C.gold : C.muted,
+              border: taxStrategy === s ? `1px solid ${C.gold}` : `1px solid ${C.borderSubtle}`,
+            }}>{s}</button>
+          ))}
+        </div>
+        {strategyMsg && <span style={{ color: C.gold, fontSize: "12px" }}>{strategyMsg}</span>}
       </div>
 
       {/* Metric cards */}
