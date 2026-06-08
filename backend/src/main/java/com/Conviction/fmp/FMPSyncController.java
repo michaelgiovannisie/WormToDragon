@@ -123,17 +123,18 @@ public class FMPSyncController {
 
     /**
      * Start the NASDAQ-100 background batch sync.
-     * Returns 202 Accepted if the job was started, or 409 Conflict if one is already running.
+     * ?full=true  → fetch full 20-year price history (first-time setup, ~87 min)
+     * ?full=false → top up last 3 months only (regular refresh, ~15 min) [default]
+     * Returns 202 Accepted if started, 409 Conflict if already running.
      */
     @PostMapping("/sync-nasdaq100")
-    public ResponseEntity<Nasdaq100SyncService.JobStatus> startNasdaq100Sync() {
+    public ResponseEntity<Nasdaq100SyncService.JobStatus> startNasdaq100Sync(
+            @RequestParam(defaultValue = "false") boolean full) {
         boolean started = nasdaq100SyncService.requestStart();
         if (!started) {
-            // Already running — return current status with 409
             return ResponseEntity.status(409).body(nasdaq100SyncService.getStatus());
         }
-        // Fire the async method and return immediately
-        nasdaq100SyncService.runSync();
+        nasdaq100SyncService.runSync(full);
         return ResponseEntity.accepted().body(nasdaq100SyncService.getStatus());
     }
 

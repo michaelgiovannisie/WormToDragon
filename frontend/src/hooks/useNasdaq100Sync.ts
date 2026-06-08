@@ -8,6 +8,7 @@ export interface SyncStatus {
   currentSymbol: string | null;
   failures: string[];
   summary: string | null;
+  fullHistory: boolean;
 }
 
 const POLL_INTERVAL_MS = 2500;
@@ -20,6 +21,7 @@ export function useNasdaq100Sync() {
     currentSymbol: null,
     failures: [],
     summary: null,
+    fullHistory: false,
   });
   const [starting, setStarting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,11 +66,11 @@ export function useNasdaq100Sync() {
     return stopPolling;
   }, []);
 
-  const start = async () => {
+  const start = async (full = false) => {
     if (starting || status.state === "running") return;
     setStarting(true);
     try {
-      const res = await fetch(`${API}/fmp/sync-nasdaq100`, { method: "POST" });
+      const res = await fetch(`${API}/fmp/sync-nasdaq100?full=${full}`, { method: "POST" });
       const data: SyncStatus = await res.json();
       setStatus(data);
       if (res.status === 202 || data.state === "running") {

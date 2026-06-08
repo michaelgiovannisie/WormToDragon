@@ -1,5 +1,6 @@
 package com.conviction.fmp;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +27,8 @@ public class Nasdaq100SyncService {
 
     private static final Logger log = LoggerFactory.getLogger(Nasdaq100SyncService.class);
 
-    // ms to sleep between each top-level sync call within a symbol (~3 calls/sec)
-    private static final long THROTTLE_MS = 350;
+    // ms to sleep between each top-level sync call within a symbol (~4 calls/sec)
+    private static final long THROTTLE_MS = 150;
 
     // Fallback list if the FMP constituents endpoint is unavailable on the current plan
     private static final List<String> FALLBACK_SYMBOLS = List.of(
@@ -53,7 +54,7 @@ public class Nasdaq100SyncService {
 
     // ── in-memory job state ───────────────────────────────────────────────────
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private volatile JobStatus currentStatus = new JobStatus("idle", 0, 0, null, List.of(), null);
+    private volatile JobStatus currentStatus = new JobStatus("idle", 0, 0, null, List.of(), null, false);
 
     public Nasdaq100SyncService(
             FMPClient fmp,
@@ -82,44 +83,50 @@ public class Nasdaq100SyncService {
     }
 
     /**
-     * Run the full NASDAQ-100 batch sync in the background.
+     * Run the NASDAQ-100 batch sync in the background.
+     * @param fullHistory true = fetch full 20-year price history (first-time setup, ~87 min);
+     *                    false = top up last 3 months only (regular refresh, ~15 min).
      * Called only after requestStart() returns true.
      */
     @Async("nasdaq100Executor")
-    public void runSync() {
+    public void runSync(boolean fullHistory) {
         List<String> symbols = fetchNasdaq100Symbols();
         int total = symbols.size();
         List<String> failures = new ArrayList<>();
 
-        currentStatus = new JobStatus("running", 0, total, symbols.isEmpty() ? null : symbols.get(0), List.of(), null);
-        log.info("NASDAQ-100 batch sync started — {} symbols", total);
+        currentStatus = new JobStatus("running", 0, total, symbols.isEmpty() ? null : symbols.get(0), List.of(), null, fullHistory);
+        log.info("NASDAQ-100 batch sync started ({}) — {} symbols", fullHistory ? "full history" : "3-month top-up", total);
 
         for (int idx = 0; idx < symbols.size(); idx++) {
             String sym = symbols.get(idx);
-            currentStatus = new JobStatus("running", idx, total, sym, List.copyOf(failures), null);
+            currentStatus = new JobStatus("running", idx, total, sym, List.copyOf(failures), null, fullHistory);
 
             try {
                 // 1. Profile (~1 FMP call)
                 profileSync.sync(sym);
                 throttle();
 
-                // 2. Key metrics (~1 FMP call)
+                // 2. Key metrics (~2 FMP calls)
                 keyMetricsSync.sync(sym);
                 throttle();
 
-                // 3. Historical prices — try FMP first, fall back to Yahoo (~1 FMP call)
-                var prices = historicalSync.syncFull(sym);
-                if (prices.isEmpty()) prices = historicalSync.syncFull(sym.replace('.', '-'));
-                if (prices.isEmpty()) yahooSync.syncFull(sym);
+                // 3. Historical prices
+                if (fullHistory) {
+                    // Full 20-year fetch — slow (~45s/symbol) but thorough. Use once for initial setup.
+                    var prices = historicalSync.syncFull(sym);
+                    if (prices.isEmpty()) prices = historicalSync.syncFull(sym.replace('.', '-'));
+                    if (prices.isEmpty()) yahooSync.syncFull(sym);
+                } else {
+                    // Last 3 months only — tops up recent bars, near-instant for already-synced symbols.
+                    LocalDate threeMonthsAgo = LocalDate.now().minusMonths(3);
+                    var prices = historicalSync.sync(sym, threeMonthsAgo, null);
+                    if (prices.isEmpty()) historicalSync.sync(sym.replace('.', '-'), threeMonthsAgo, null);
+                }
                 throttle();
 
-                // 4. Financials: annual + quarterly (~9 FMP calls, each internally called with throttle spacing)
-                // We let FinancialsSyncService make its own FMP calls; throttle between each statement call
-                // by sleeping before invoking (each fetch() inside syncSymbol is a separate FMP call).
-                // The bulk of the rate budget is here — syncSymbol makes ~9 calls internally.
-                // We add a longer pause after financials to keep the rolling average safe.
+                // 4. Financials: annual + quarterly (~9 FMP calls)
                 financialsSync.syncSymbol(sym);
-                Thread.sleep(2000); // generous pause after the ~9-call financials block
+                Thread.sleep(1000); // pause after the ~9-call financials block
 
                 // Refresh holding prices if this symbol is in the portfolio
                 holdingService.refreshPricesForSymbol(sym);
@@ -141,7 +148,7 @@ public class Nasdaq100SyncService {
             : String.format("Synced %d/%d — %d failed: %s",
                 total - failures.size(), total, failures.size(), String.join(", ", failures));
 
-        currentStatus = new JobStatus("completed", total, total, null, List.copyOf(failures), summary);
+        currentStatus = new JobStatus("completed", total, total, null, List.copyOf(failures), summary, fullHistory);
         running.set(false);
         log.info("NASDAQ-100 batch sync completed. {}", summary);
     }
@@ -181,6 +188,7 @@ public class Nasdaq100SyncService {
         int total,
         String currentSymbol,
         List<String> failures,
-        String summary         // non-null when completed
+        String summary,        // non-null when completed
+        boolean fullHistory    // true = full 20-year history, false = 3-month top-up
     ) {}
 }

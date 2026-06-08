@@ -37,8 +37,15 @@ public class FMPProfileSync {
 
         Map<String, Object> p = result.get(0);
 
+        // Create a new Equity asset if one doesn't exist yet (e.g. batch sync of NASDAQ-100)
         Asset asset = assetRepository.findBySymbol(symbol.toUpperCase())
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + symbol));
+                .orElseGet(() -> {
+                    Equity eq = new Equity();
+                    eq.setSymbol(symbol.toUpperCase());
+                    eq.setName(symbol.toUpperCase()); // placeholder — overwritten below
+                    eq.setActive(true);
+                    return assetRepository.save(eq);
+                });
 
         if (asset instanceof Equity eq) {
             eq.setName(str(p, "companyName"));
