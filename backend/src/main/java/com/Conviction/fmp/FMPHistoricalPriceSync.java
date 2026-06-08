@@ -26,9 +26,13 @@ public class FMPHistoricalPriceSync {
     public List<HistoricalPriceResponse> sync(String symbol, LocalDate from, LocalDate to) {
         String path = "/historical-price-eod/full";
 
-        String[] params = (from != null && to != null)
-                ? new String[]{"symbol", symbol, "from", from.toString(), "to", to.toString()}
-                : new String[]{"symbol", symbol};
+        String[] params;
+        if (from != null && to != null)
+            params = new String[]{"symbol", symbol, "from", from.toString(), "to", to.toString()};
+        else if (from != null)
+            params = new String[]{"symbol", symbol, "from", from.toString()};
+        else
+            params = new String[]{"symbol", symbol};
 
         List<Map<String, Object>> rows = fmp.get(path, List.class, params);
 
@@ -44,8 +48,8 @@ public class FMPHistoricalPriceSync {
     }
 
     public List<HistoricalPriceResponse> syncFull(String symbol) {
-        // Default to 2 years to avoid huge payloads
-        return sync(symbol, LocalDate.now().minusYears(2), LocalDate.now());
+        // Fetch max history — FMP caps at 5000 rows (~20 years)
+        return sync(symbol, LocalDate.of(1980, 1, 1), null);
     }
 
     private UpsertHistoricalPriceRequest toUpsertRequest(Map<String, Object> row) {

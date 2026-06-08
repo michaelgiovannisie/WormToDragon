@@ -37,7 +37,7 @@ export default function Research() {
   const [priceRange, setPriceRange]     = useState("1y");
   const searchTimeout                   = useRef<number | null>(null);
 
-  const PRICE_RANGES = ["1w","1m","3m","6m","ytd","1y","all"];
+  const PRICE_RANGES = ["1w","1m","3m","6m","ytd","1y","5y","all"];
 
   // Sync URL param → symbol state
   useEffect(() => {
@@ -224,11 +224,12 @@ export default function Research() {
     if (priceRange === "all" || all.length === 0) return all;
     const now = new Date();
     let cutoff: Date;
-    if (priceRange === "1w")  cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    if      (priceRange === "1w")  cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
     else if (priceRange === "1m")  cutoff = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
     else if (priceRange === "3m")  cutoff = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
     else if (priceRange === "6m")  cutoff = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
     else if (priceRange === "ytd") cutoff = new Date(now.getFullYear(), 0, 1);
+    else if (priceRange === "5y")  cutoff = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
     else                           cutoff = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); // 1y
     return all.filter(p => new Date(p.date + "T00:00:00") >= cutoff);
   })();
