@@ -26,7 +26,7 @@ public class FMPKeyMetricsSync {
         List<Map<String, Object>> result = fmp.get("/key-metrics-ttm", List.class, "symbol", symbol);
 
         if (result == null || result.isEmpty()) {
-            throw new IllegalStateException("No key metrics returned for: " + symbol);
+            return new FMPKeyMetricsResponse(symbol, null, null, null);
         }
 
         Map<String, Object> m = result.get(0);

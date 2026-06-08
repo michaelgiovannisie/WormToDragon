@@ -31,7 +31,8 @@ public class FMPProfileSync {
         List<Map<String, Object>> result = fmp.get("/profile", List.class, "symbol", symbol);
 
         if (result == null || result.isEmpty()) {
-            throw new IllegalStateException("No profile returned for: " + symbol);
+            return assetService.toResponse(assetRepository.findBySymbol(symbol.toUpperCase())
+                    .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + symbol)));
         }
 
         Map<String, Object> p = result.get(0);

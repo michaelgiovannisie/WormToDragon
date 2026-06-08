@@ -13,20 +13,37 @@ export default function Dashboard() {
   const [holdings, setHoldings]         = useState<any[]>([]);
   const [snapshots, setSnapshots]       = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [syncing, setSyncing]           = useState(false);
+  const [syncMsg, setSyncMsg]           = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
     fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`)
       .then(r => r.json()).then(setSummary).catch(console.error);
-
-    fetch(`${API}/holdings/account/${ACCOUNT_ID}`)
+    fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`)
       .then(r => r.json()).then(setHoldings).catch(console.error);
-
     fetch(`${API}/portfolios/${PORTFOLIO_ID}/snapshots`)
       .then(r => r.json()).then(setSnapshots).catch(console.error);
-
     fetch(`${API}/transactions/account/${ACCOUNT_ID}`)
       .then(r => r.json()).then(setTransactions).catch(console.error);
-  }, []);
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const syncAllPrices = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch(`${API}/fmp/sync-all-holdings`, { method: "POST" });
+      const data = await res.json();
+      const synced = Array.isArray(data) ? data.filter((r: any) => r.historicalPricesSynced > 0).length : 0;
+      setSyncMsg(`Synced ${synced}/${Array.isArray(data) ? data.length : 0} symbols`);
+      loadData();
+    } catch {
+      setSyncMsg("Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const trendData = snapshots.length > 0
     ? snapshots.map((s: any) => ({
@@ -56,9 +73,19 @@ export default function Dashboard() {
       <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>
         Long-Term Compounders
       </h2>
-      <p style={{ color: C.muted, marginBottom: "40px" }}>
+      <p style={{ color: C.muted, marginBottom: "24px" }}>
         A refined view of capital, conviction, and performance.
       </p>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
+        <button
+          onClick={syncAllPrices}
+          disabled={syncing}
+          style={{ background: C.gold, color: "#000", border: "none", borderRadius: "10px", padding: "10px 20px", fontWeight: 700, cursor: syncing ? "not-allowed" : "pointer", opacity: syncing ? 0.6 : 1 }}
+        >
+          {syncing ? "Syncing..." : "⟳ Sync All Prices"}
+        </button>
+        {syncMsg && <span style={{ color: C.muted, fontSize: "13px" }}>{syncMsg}</span>}
+      </div>
 
       {/* Metric cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "20px", marginBottom: "32px" }}>

@@ -1,6 +1,7 @@
 package com.conviction.fmp;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -10,9 +11,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.conviction.holding.repository.HoldingRepository;
+
 import com.conviction.asset.dto.AssetResponse;
 import com.conviction.fmp.FMPKeyMetricsSync.FMPKeyMetricsResponse;
 import com.conviction.historicalprice.dto.HistoricalPriceResponse;
+import com.conviction.holding.service.HoldingService;
 
 @RestController
 @RequestMapping("/api/fmp")
@@ -21,15 +25,21 @@ public class FMPSyncController {
     private final FMPHistoricalPriceSync historicalSync;
     private final FMPProfileSync profileSync;
     private final FMPKeyMetricsSync keyMetricsSync;
+    private final HoldingService holdingService;
+    private final HoldingRepository holdingRepository;
 
     public FMPSyncController(
             FMPHistoricalPriceSync historicalSync,
             FMPProfileSync profileSync,
-            FMPKeyMetricsSync keyMetricsSync
+            FMPKeyMetricsSync keyMetricsSync,
+            HoldingService holdingService,
+            HoldingRepository holdingRepository
     ) {
         this.historicalSync = historicalSync;
         this.profileSync = profileSync;
         this.keyMetricsSync = keyMetricsSync;
+        this.holdingService = holdingService;
+        this.holdingRepository = holdingRepository;
     }
 
     /** Fetch and store EOD OHLCV history. Optional from/to to limit range. */
@@ -58,20 +68,47 @@ public class FMPSyncController {
         return keyMetricsSync.sync(symbol.toUpperCase());
     }
 
-    /** Convenience: run all 3 syncs in sequence. */
+    /** Convenience: run all 3 syncs in sequence, then refresh holding market prices. */
     @PostMapping("/{symbol}/sync-all")
     public FMPSyncAllResponse syncAll(@PathVariable String symbol) {
         String sym = symbol.toUpperCase();
         AssetResponse profile = profileSync.sync(sym);
         FMPKeyMetricsResponse metrics = keyMetricsSync.sync(sym);
         List<HistoricalPriceResponse> prices = historicalSync.syncFull(sym);
-        return new FMPSyncAllResponse(sym, profile, metrics, prices.size());
+        int holdingsUpdated = holdingService.refreshPricesForSymbol(sym);
+        return new FMPSyncAllResponse(sym, profile, metrics, prices.size(), holdingsUpdated);
+    }
+
+    /** Sync all active holdings at once — profile + metrics + history + price refresh for each symbol. */
+    @PostMapping("/sync-all-holdings")
+    public List<FMPSyncAllResponse> syncAllHoldings() {
+        List<String> symbols = holdingRepository.findAll().stream()
+                .filter(h -> Boolean.TRUE.equals(h.getActive()) && h.getQuantityHeld() != null
+                        && h.getQuantityHeld().compareTo(java.math.BigDecimal.valueOf(0.001)) > 0)
+                .map(h -> h.getAsset().getSymbol())
+                .distinct()
+                .toList();
+
+        List<FMPSyncAllResponse> results = new ArrayList<>();
+        for (String sym : symbols) {
+            try {
+                AssetResponse profile = profileSync.sync(sym);
+                FMPKeyMetricsResponse metrics = keyMetricsSync.sync(sym);
+                List<HistoricalPriceResponse> prices = historicalSync.syncFull(sym);
+                int holdingsUpdated = holdingService.refreshPricesForSymbol(sym);
+                results.add(new FMPSyncAllResponse(sym, profile, metrics, prices.size(), holdingsUpdated));
+            } catch (Exception e) {
+                results.add(new FMPSyncAllResponse(sym, null, null, 0, 0));
+            }
+        }
+        return results;
     }
 
     public record FMPSyncAllResponse(
             String symbol,
             AssetResponse profile,
             FMPKeyMetricsResponse metrics,
-            int historicalPricesSynced
+            int historicalPricesSynced,
+            int holdingsUpdated
     ) {}
 }

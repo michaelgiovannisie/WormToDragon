@@ -1,4 +1,4 @@
 export const API = "http://localhost:8080/api";
 
-export const PORTFOLIO_ID = "cd814fb9-0496-43b9-9f0a-632f5bafbe67";
-export const ACCOUNT_ID   = "07441db5-e021-4ddf-991a-94c7a9ddc500";
+export const PORTFOLIO_ID = "4bed7a37-de64-4b4f-9fda-bcb8bfc10786";
+export const ACCOUNT_ID   = "ff3dad36-62c2-4126-bfca-34fc3cabdcf8";

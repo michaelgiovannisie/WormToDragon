@@ -9,9 +9,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.conviction.account.entity.Account;
 import com.conviction.asset.entity.Asset;
+import com.conviction.historicalprice.repository.HistoricalPriceRepository;
 import com.conviction.holding.dto.PortfolioHoldingResponse;
 import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
@@ -30,16 +32,38 @@ public class HoldingService {
     private final HoldingRepository holdingRepository;
     private final TransactionRepository transactionRepository;
     private final TaxLotAllocationRepository allocationRepository;
+    private final HistoricalPriceRepository historicalPriceRepository;
 
     public HoldingService(
                 HoldingRepository holdingRepository,
                 TransactionRepository transactionRepository,
-                TaxLotAllocationRepository allocationRepository
+                TaxLotAllocationRepository allocationRepository,
+                HistoricalPriceRepository historicalPriceRepository
         ) {
             this.holdingRepository = holdingRepository;
             this.transactionRepository = transactionRepository;
             this.allocationRepository = allocationRepository;
+            this.historicalPriceRepository = historicalPriceRepository;
         }
+
+    @Transactional
+    public int refreshPricesForSymbol(String symbol) {
+        return historicalPriceRepository
+                .findTopByAssetSymbolOrderByPriceDateDesc(symbol)
+                .map(latest -> {
+                    BigDecimal price = latest.getClose();
+                    List<com.conviction.holding.entity.Holding> holdings =
+                            holdingRepository.findActiveByAssetSymbolWithAssetAndAccount(symbol);
+                    for (com.conviction.holding.entity.Holding h : holdings) {
+                        h.setMarketPrice(price);
+                        h.setMarketValue(h.getQuantityHeld().multiply(price));
+                        h.setUnrealizedGain(h.getMarketValue().subtract(h.getTotalCostBasis()));
+                        holdingRepository.save(h);
+                    }
+                    return holdings.size();
+                })
+                .orElse(0);
+    }
 
     public void updateHoldingFromTransaction(Transaction transaction) {
         if (transaction.getAsset() == null) {
