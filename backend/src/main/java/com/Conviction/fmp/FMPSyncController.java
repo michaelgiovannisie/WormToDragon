@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +30,7 @@ public class FMPSyncController {
     private final YahooHistoricalPriceSync yahooSync;
     private final HoldingService holdingService;
     private final HoldingRepository holdingRepository;
+    private final Nasdaq100SyncService nasdaq100SyncService;
 
     public FMPSyncController(
             FMPHistoricalPriceSync historicalSync,
@@ -35,14 +38,16 @@ public class FMPSyncController {
             FMPKeyMetricsSync keyMetricsSync,
             YahooHistoricalPriceSync yahooSync,
             HoldingService holdingService,
-            HoldingRepository holdingRepository
+            HoldingRepository holdingRepository,
+            Nasdaq100SyncService nasdaq100SyncService
     ) {
-        this.historicalSync = historicalSync;
-        this.profileSync = profileSync;
-        this.keyMetricsSync = keyMetricsSync;
-        this.yahooSync = yahooSync;
-        this.holdingService = holdingService;
-        this.holdingRepository = holdingRepository;
+        this.historicalSync       = historicalSync;
+        this.profileSync          = profileSync;
+        this.keyMetricsSync       = keyMetricsSync;
+        this.yahooSync            = yahooSync;
+        this.holdingService       = holdingService;
+        this.holdingRepository    = holdingRepository;
+        this.nasdaq100SyncService = nasdaq100SyncService;
     }
 
     /** Fetch and store EOD OHLCV history. Optional from/to to limit range. */
@@ -113,4 +118,28 @@ public class FMPSyncController {
             int historicalPricesSynced,
             int holdingsUpdated
     ) {}
+
+    // ── NASDAQ-100 batch sync ─────────────────────────────────────────────────
+
+    /**
+     * Start the NASDAQ-100 background batch sync.
+     * Returns 202 Accepted if the job was started, or 409 Conflict if one is already running.
+     */
+    @PostMapping("/sync-nasdaq100")
+    public ResponseEntity<Nasdaq100SyncService.JobStatus> startNasdaq100Sync() {
+        boolean started = nasdaq100SyncService.requestStart();
+        if (!started) {
+            // Already running — return current status with 409
+            return ResponseEntity.status(409).body(nasdaq100SyncService.getStatus());
+        }
+        // Fire the async method and return immediately
+        nasdaq100SyncService.runSync();
+        return ResponseEntity.accepted().body(nasdaq100SyncService.getStatus());
+    }
+
+    /** Poll for NASDAQ-100 batch sync progress. */
+    @GetMapping("/sync-nasdaq100/status")
+    public Nasdaq100SyncService.JobStatus getNasdaq100SyncStatus() {
+        return nasdaq100SyncService.getStatus();
+    }
 }

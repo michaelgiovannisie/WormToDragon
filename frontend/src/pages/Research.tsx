@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
+import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 
 const MODELS = ["DCF", "PEG", "GRAHAM", "CRYPTO_RISK"] as const;
 type Model = typeof MODELS[number];
@@ -259,9 +260,12 @@ export default function Research() {
       <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>
         Valuation Workspace
       </h2>
-      <p style={{ color: C.muted, marginBottom: "40px" }}>
-        Search any asset to analyse intrinsic value, position sizing, and tax efficiency.
-      </p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "40px", flexWrap: "wrap", gap: "12px" }}>
+        <p style={{ color: C.muted, margin: 0 }}>
+          Search any asset to analyse intrinsic value, position sizing, and tax efficiency.
+        </p>
+        <Nasdaq100SyncWidget />
+      </div>
 
       {/* Search */}
       <section style={{ ...sectionStyle, marginBottom: "32px", position: "relative" }}>

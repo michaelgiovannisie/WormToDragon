@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { API, PORTFOLIO_ID } from "../constants";
 import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
+import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 
 type SortKey = "symbol" | "marketValue" | "unrealizedGain" | "quantityHeld" | "averageCostBasis" | "dayChangePct";
 
@@ -59,7 +60,7 @@ export default function Holdings() {
     { label: "Total Return",       value: `${Number(totalReturn) >= 0 ? "+" : ""}${totalReturn}%`, color: Number(totalReturn) >= 0 ? C.green : C.red },
   ];
 
-  const th = (key: SortKey | null, label: string): React.CSSProperties => ({
+  const th = (key: SortKey | null, _label: string): React.CSSProperties => ({
     paddingBottom: "12px", cursor: key ? "pointer" : "default",
     color: key && sortKey === key ? C.gold : C.muted,
     fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em",
@@ -160,7 +161,10 @@ export default function Holdings() {
     <div style={{ color: C.text, fontFamily: C.font }}>
       <p style={labelStyle}>Portfolio</p>
       <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>Holdings</h2>
-      <p style={{ color: C.muted, marginBottom: "40px" }}>All current positions across your account.</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "40px", flexWrap: "wrap", gap: "12px" }}>
+        <p style={{ color: C.muted, margin: 0 }}>All current positions across your account.</p>
+        <Nasdaq100SyncWidget />
+      </div>
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "20px", marginBottom: "32px" }}>

@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { API, PORTFOLIO_ID, ACCOUNT_ID } from "../constants";
 import { C, PIE_COLORS, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
+import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -97,6 +98,9 @@ export default function Dashboard() {
           {syncing ? "Syncing..." : "⟳ Sync All Prices"}
         </button>
         {syncMsg && <span style={{ color: C.muted, fontSize: "13px" }}>{syncMsg}</span>}
+        <div style={{ marginLeft: "auto" }}>
+          <Nasdaq100SyncWidget />
+        </div>
       </div>
 
       {/* Metric cards */}
