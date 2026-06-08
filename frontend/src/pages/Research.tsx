@@ -419,7 +419,7 @@ export default function Research() {
             </div>
 
             {financials.length === 0
-              ? <p style={{ color: C.muted }}>No financial data yet. Click "Sync from FMP" to load — if it still shows empty after syncing, the FMP free tier daily quota (250 req/day) may be exhausted. Try again tomorrow.</p>
+              ? <p style={{ color: C.muted }}>No financial data yet — click ⟳ Sync to load.</p>
               : (() => {
                   const rows = [...financials].reverse();
                   const fmt = (d: string) => d?.slice(0, 4) ?? "";

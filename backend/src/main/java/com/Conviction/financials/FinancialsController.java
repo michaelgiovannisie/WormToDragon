@@ -35,6 +35,7 @@ public class FinancialsController {
 
     /** Fetch from FMP and persist — called by Sync from FMP button. */
     @PostMapping("/{symbol}/sync")
+    @org.springframework.transaction.annotation.Transactional
     public org.springframework.http.ResponseEntity<FinancialsResponse> syncFinancials(@PathVariable String symbol) {
         String sym = symbol.toUpperCase();
 
@@ -49,6 +50,9 @@ public class FinancialsController {
                 new FinancialsResponse(sym, List.of())
             );
         }
+
+        // Wipe stale rows so a re-sync always reflects exactly what FMP returns
+        repo.deleteBySymbol(sym);
 
         for (int i = 0; i < income.size(); i++) {
             Map<String, Object> inc = income.get(i);
@@ -95,7 +99,7 @@ public class FinancialsController {
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetch(String path, String symbol) {
-        List<Map<String, Object>> result = fmp.get(path, List.class, "symbol", symbol, "limit", "5");
+        List<Map<String, Object>> result = fmp.get(path, List.class, "symbol", symbol, "limit", "10");
         return result != null ? result : List.of();
     }
 

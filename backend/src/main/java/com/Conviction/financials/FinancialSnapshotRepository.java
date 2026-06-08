@@ -11,4 +11,6 @@ public interface FinancialSnapshotRepository extends JpaRepository<FinancialSnap
     List<FinancialSnapshot> findBySymbolOrderByFiscalYearDesc(String symbol);
 
     Optional<FinancialSnapshot> findBySymbolAndFiscalYear(String symbol, String fiscalYear);
+
+    void deleteBySymbol(String symbol);
 }
