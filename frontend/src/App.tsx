@@ -5,8 +5,7 @@ import Holdings   from "./pages/Holdings";
 import Research   from "./pages/Research";
 import Tax        from "./pages/Tax";
 import Import     from "./pages/Import";
-import Discover   from "./pages/Discover";
-import Watchlist  from "./pages/Watchlist";
+
 import { C }      from "./theme";
 
 export default function App() {
@@ -21,8 +20,7 @@ export default function App() {
             <Route path="/research"  element={<Research />}  />
             <Route path="/tax"       element={<Tax />}       />
             <Route path="/import"    element={<Import />}    />
-            <Route path="/discover"  element={<Discover />}  />
-            <Route path="/watchlist" element={<Watchlist />} />
+
           </Routes>
         </main>
       </div>

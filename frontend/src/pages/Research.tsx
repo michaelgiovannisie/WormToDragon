@@ -45,15 +45,17 @@ export default function Research() {
     if (s) setSymbol(s);
   }, [searchParams]);
 
-  // Search debounce
+  const [adding, setAdding] = useState(false);
+
+  // Search debounce — queries FMP universe directly
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     const q = query.trim();
     if (q.length < 1) { setResults([]); return; }
     searchTimeout.current = window.setTimeout(() => {
-      fetch(`${API}/assets/search?query=${encodeURIComponent(q)}`)
+      fetch(`${API}/fmp/search?query=${encodeURIComponent(q)}`)
         .then(r => r.json()).then(setResults).catch(console.error);
-    }, 200);
+    }, 300);
   }, [query]);
 
   // Load asset detail
@@ -83,10 +85,17 @@ export default function Research() {
     // ^^^ reads from DB (no FMP call) — use Sync to refresh
   }, [symbol]);
 
-  const selectSymbol = (s: string) => {
-    setSymbol(s);
+  const selectSymbol = async (s: string, inLibrary: boolean) => {
     setQuery("");
     setResults([]);
+    if (!inLibrary) {
+      setAdding(true);
+      try {
+        await fetch(`${API}/fmp/add-to-library/${s}`, { method: "POST" });
+      } catch (e) { console.error(e); }
+      finally { setAdding(false); }
+    }
+    setSymbol(s);
   };
 
   const clearSymbol = () => {
@@ -253,27 +262,34 @@ export default function Research() {
       </p>
 
       {/* Search */}
-      <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+      <section style={{ ...sectionStyle, marginBottom: "32px", position: "relative" }}>
         <p style={labelStyle}>Asset Search</p>
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by symbol or name…"
+          placeholder="Search any asset by symbol or name (e.g. AMD, Apple, BTC)…"
           style={{ ...inputStyle, marginTop: "20px", fontSize: "16px", padding: "14px 16px" }}
         />
+        {adding && (
+          <p style={{ color: C.gold, fontSize: "13px", marginTop: "8px" }}>Adding to library…</p>
+        )}
         {query.trim().length > 0 && (
           <div style={{ marginTop: "16px", borderTop: `1px solid ${C.borderSubtle}` }}>
             {results.length === 0
-              ? <p style={{ color: C.muted, marginTop: "16px" }}>No matching assets.</p>
+              ? <p style={{ color: C.muted, marginTop: "16px" }}>No results — try a different symbol or name.</p>
               : results.map((a: any) => (
-                  <button key={a.id} onClick={() => selectSymbol(a.symbol)}
-                    style={{ width: "100%", display: "grid", gridTemplateColumns: "100px 1fr 100px",
+                  <button key={a.symbol} onClick={() => selectSymbol(a.symbol, a.inLibrary)}
+                    style={{ width: "100%", display: "grid", gridTemplateColumns: "100px 1fr 120px 80px",
                       gap: "16px", alignItems: "center", background: "transparent", color: C.text,
                       border: 0, borderBottom: `1px solid ${C.borderSubtle}`, padding: "14px 0",
                       cursor: "pointer", textAlign: "left", fontFamily: C.font }}>
                     <strong style={{ color: C.gold }}>{a.symbol}</strong>
                     <span style={{ fontSize: "14px" }}>{a.name}</span>
-                    <span style={{ color: C.muted, textAlign: "right", fontSize: "12px" }}>{a.assetType}</span>
+                    <span style={{ color: C.muted, fontSize: "12px" }}>{a.exchangeShortName ?? a.exchange ?? ""}</span>
+                    <span style={{ textAlign: "right", fontSize: "11px",
+                      color: a.inLibrary ? C.green : C.muted }}>
+                      {a.inLibrary ? "In library" : "Add & open"}
+                    </span>
                   </button>
                 ))}
           </div>
@@ -281,9 +297,9 @@ export default function Research() {
       </section>
 
       {/* No symbol selected */}
-      {!symbol && (
+      {!symbol && !adding && (
         <p style={{ color: C.muted, textAlign: "center", marginTop: "80px", fontSize: "18px" }}>
-          Search for an asset above to begin your analysis.
+          Search for any asset above to begin your analysis.
         </p>
       )}
 
