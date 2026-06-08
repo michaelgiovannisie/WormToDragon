@@ -15,19 +15,27 @@ export default function Dashboard() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [syncing, setSyncing]           = useState(false);
   const [syncMsg, setSyncMsg]           = useState<string | null>(null);
+  const [chartRange, setChartRange]     = useState("1y");
 
-  const loadData = () => {
+  const RANGES = ["1d","1w","1m","3m","ytd","1y","all"];
+
+  const loadData = (range = chartRange) => {
     fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`)
       .then(r => r.json()).then(setSummary).catch(console.error);
     fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`)
       .then(r => r.json()).then(setHoldings).catch(console.error);
-    fetch(`${API}/portfolios/${PORTFOLIO_ID}/snapshots`)
+    fetch(`${API}/portfolios/${PORTFOLIO_ID}/value-history?range=${range}`)
       .then(r => r.json()).then(setSnapshots).catch(console.error);
     fetch(`${API}/transactions/account/${ACCOUNT_ID}`)
       .then(r => r.json()).then(setTransactions).catch(console.error);
   };
 
   useEffect(() => { loadData(); }, []);
+
+  const handleRangeChange = (range: string) => {
+    setChartRange(range);
+    loadData(range);
+  };
 
   const syncAllPrices = async () => {
     setSyncing(true);
@@ -46,24 +54,26 @@ export default function Dashboard() {
   };
 
   const trendData = snapshots.length > 0
-    ? snapshots.map((s: any) => ({
-        date: s.snapshotDate,
-        value: Number(s.totalMarketValue ?? 0),
-      }))
-    : [
-        { date: "Jan", value: 3200 }, { date: "Feb", value: 3500 },
-        { date: "Mar", value: 4100 }, { date: "Apr", value: 4500 },
-        { date: "May", value: 5200 }, { date: "Jun", value: 5805 },
-      ];
+    ? snapshots.map((s: any) => ({ date: s.date, value: Number(s.value ?? 0) }))
+    : [];
 
   const recentTx = [...transactions]
     .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
     .slice(0, 10);
 
+  const totalReturn = (() => {
+    const cost = Number(summary?.totalCostBasis ?? 0);
+    const unrealized = Number(summary?.totalUnrealizedGain ?? 0);
+    const realized = Number(summary?.totalRealizedGain ?? 0);
+    if (cost === 0) return 0;
+    return ((unrealized + realized) / cost) * 100;
+  })();
+
   const metricCards = [
     { label: "Portfolio Value",  value: `$${Number(summary?.totalMarketValue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}` },
     { label: "Unrealized Gain",  value: `$${Number(summary?.totalUnrealizedGain ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: Number(summary?.totalUnrealizedGain ?? 0) >= 0 ? C.green : C.red },
     { label: "Realized Gain",    value: `$${Number(summary?.totalRealizedGain ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: Number(summary?.totalRealizedGain ?? 0) >= 0 ? C.green : C.red },
+    { label: "Total Return",     value: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)}%`, color: totalReturn >= 0 ? C.green : C.red },
     { label: "Positions",        value: String(holdings.length) },
   ];
 
@@ -88,7 +98,7 @@ export default function Dashboard() {
       </div>
 
       {/* Metric cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "20px", marginBottom: "32px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "20px", marginBottom: "32px" }}>
         {metricCards.map(({ label, value, color }) => (
           <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
             <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
@@ -100,8 +110,24 @@ export default function Dashboard() {
       {/* Charts row */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", marginBottom: "32px" }}>
         <section style={sectionStyle}>
-          <p style={labelStyle}>Portfolio Trend</p>
-          <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Value Over Time</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+            <div>
+              <p style={labelStyle}>Portfolio Trend</p>
+              <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Value Over Time</h3>
+            </div>
+            <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+              {RANGES.map(r => (
+                <button key={r} onClick={() => handleRangeChange(r)} style={{
+                  background: chartRange === r ? C.gold : "transparent",
+                  color: chartRange === r ? "#000" : C.muted,
+                  border: `1px solid ${chartRange === r ? C.gold : C.border}`,
+                  borderRadius: "8px", padding: "4px 10px", fontSize: "12px",
+                  fontWeight: chartRange === r ? 700 : 400,
+                  cursor: "pointer", textTransform: "uppercase"
+                }}>{r}</button>
+              ))}
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trendData}>
               <CartesianGrid stroke="rgba(200,169,106,0.08)" vertical={false} />
@@ -147,7 +173,7 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody>
-            {holdings.map((h: any) => {
+            {[...holdings].sort((a, b) => a.symbol.localeCompare(b.symbol)).map((h: any) => {
               const gain = Number(h.unrealizedGain);
               const ret  = h.totalCostBasis > 0
                 ? ((Number(h.marketValue) - Number(h.totalCostBasis)) / Number(h.totalCostBasis) * 100).toFixed(2)

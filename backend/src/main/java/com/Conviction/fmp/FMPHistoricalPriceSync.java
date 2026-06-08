@@ -33,7 +33,7 @@ public class FMPHistoricalPriceSync {
         List<Map<String, Object>> rows = fmp.get(path, List.class, params);
 
         if (rows == null || rows.isEmpty()) {
-            throw new IllegalStateException("No historical data returned for: " + symbol);
+            return List.of();
         }
 
         List<UpsertHistoricalPriceRequest> requests = rows.stream()

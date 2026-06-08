@@ -25,6 +25,7 @@ public class FMPSyncController {
     private final FMPHistoricalPriceSync historicalSync;
     private final FMPProfileSync profileSync;
     private final FMPKeyMetricsSync keyMetricsSync;
+    private final YahooHistoricalPriceSync yahooSync;
     private final HoldingService holdingService;
     private final HoldingRepository holdingRepository;
 
@@ -32,12 +33,14 @@ public class FMPSyncController {
             FMPHistoricalPriceSync historicalSync,
             FMPProfileSync profileSync,
             FMPKeyMetricsSync keyMetricsSync,
+            YahooHistoricalPriceSync yahooSync,
             HoldingService holdingService,
             HoldingRepository holdingRepository
     ) {
         this.historicalSync = historicalSync;
         this.profileSync = profileSync;
         this.keyMetricsSync = keyMetricsSync;
+        this.yahooSync = yahooSync;
         this.holdingService = holdingService;
         this.holdingRepository = holdingRepository;
     }
@@ -68,13 +71,14 @@ public class FMPSyncController {
         return keyMetricsSync.sync(symbol.toUpperCase());
     }
 
-    /** Convenience: run all 3 syncs in sequence, then refresh holding market prices. */
+    /** Convenience: run all 3 syncs in sequence, then refresh holding market prices. Falls back to Yahoo if FMP has no data. */
     @PostMapping("/{symbol}/sync-all")
     public FMPSyncAllResponse syncAll(@PathVariable String symbol) {
         String sym = symbol.toUpperCase();
         AssetResponse profile = profileSync.sync(sym);
         FMPKeyMetricsResponse metrics = keyMetricsSync.sync(sym);
         List<HistoricalPriceResponse> prices = historicalSync.syncFull(sym);
+        if (prices.isEmpty()) prices = yahooSync.syncFull(sym);
         int holdingsUpdated = holdingService.refreshPricesForSymbol(sym);
         return new FMPSyncAllResponse(sym, profile, metrics, prices.size(), holdingsUpdated);
     }
@@ -82,12 +86,7 @@ public class FMPSyncController {
     /** Sync all active holdings at once — profile + metrics + history + price refresh for each symbol. */
     @PostMapping("/sync-all-holdings")
     public List<FMPSyncAllResponse> syncAllHoldings() {
-        List<String> symbols = holdingRepository.findAll().stream()
-                .filter(h -> Boolean.TRUE.equals(h.getActive()) && h.getQuantityHeld() != null
-                        && h.getQuantityHeld().compareTo(java.math.BigDecimal.valueOf(0.001)) > 0)
-                .map(h -> h.getAsset().getSymbol())
-                .distinct()
-                .toList();
+        List<String> symbols = holdingRepository.findActiveSymbols();
 
         List<FMPSyncAllResponse> results = new ArrayList<>();
         for (String sym : symbols) {
@@ -95,6 +94,7 @@ public class FMPSyncController {
                 AssetResponse profile = profileSync.sync(sym);
                 FMPKeyMetricsResponse metrics = keyMetricsSync.sync(sym);
                 List<HistoricalPriceResponse> prices = historicalSync.syncFull(sym);
+                if (prices.isEmpty()) prices = yahooSync.syncFull(sym);
                 int holdingsUpdated = holdingService.refreshPricesForSymbol(sym);
                 results.add(new FMPSyncAllResponse(sym, profile, metrics, prices.size(), holdingsUpdated));
             } catch (Exception e) {

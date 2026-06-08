@@ -1,6 +1,8 @@
 package com.conviction.tax.repository;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +33,15 @@ public interface TaxLotRepository extends JpaRepository<TaxLot, UUID> {
     List<TaxLot> findByAssetSymbolWithDetails(
             @Param("symbol") String symbol
     );
+
+    @Query("""
+        SELECT MIN(lot.acquisitionDate)
+        FROM TaxLot lot
+        WHERE lot.asset.symbol = :symbol
+        AND lot.closed = false
+        AND lot.quantityRemaining > 0.001
+        """)
+    Optional<LocalDate> findOldestOpenLotDate(@Param("symbol") String symbol);
 
     @Modifying
     @Query("""

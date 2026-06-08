@@ -2,6 +2,7 @@ package com.conviction.fmp;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 @Component
@@ -27,6 +28,11 @@ public class FMPClient {
     }
 
     public <T> T get(String path, Class<T> responseType, String... queryPairs) {
-        return restTemplate.getForObject(url(path, queryPairs), responseType);
+        try {
+            return restTemplate.getForObject(url(path, queryPairs), responseType);
+        } catch (HttpClientErrorException e) {
+            // 402 = premium endpoint, 404 = not found — treat as no data
+            return null;
+        }
     }
 }

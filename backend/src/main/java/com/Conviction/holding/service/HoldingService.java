@@ -2,11 +2,14 @@ package com.conviction.holding.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import com.conviction.historicalprice.entity.HistoricalPrice;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,7 @@ import com.conviction.portfolio.dto.PortfolioPerformanceResponse;
 import com.conviction.portfolio.dto.PortfolioSummaryResponse;
 import com.conviction.tax.entity.TaxLotAllocation;
 import com.conviction.tax.repository.TaxLotAllocationRepository;
+import com.conviction.tax.repository.TaxLotRepository;
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
 import com.conviction.transaction.repository.TransactionRepository;
@@ -33,17 +37,20 @@ public class HoldingService {
     private final TransactionRepository transactionRepository;
     private final TaxLotAllocationRepository allocationRepository;
     private final HistoricalPriceRepository historicalPriceRepository;
+    private final TaxLotRepository taxLotRepository;
 
     public HoldingService(
                 HoldingRepository holdingRepository,
                 TransactionRepository transactionRepository,
                 TaxLotAllocationRepository allocationRepository,
-                HistoricalPriceRepository historicalPriceRepository
+                HistoricalPriceRepository historicalPriceRepository,
+                TaxLotRepository taxLotRepository
         ) {
             this.holdingRepository = holdingRepository;
             this.transactionRepository = transactionRepository;
             this.allocationRepository = allocationRepository;
             this.historicalPriceRepository = historicalPriceRepository;
+            this.taxLotRepository = taxLotRepository;
         }
 
     @Transactional
@@ -250,9 +257,37 @@ public class HoldingService {
                         ? BigDecimal.ZERO
                         : totalCostBasis.divide(totalQuantity, 2, RoundingMode.HALF_UP);
 
+        String symbol = first.getAsset().getSymbol();
+
+        // Oldest open tax lot date — reflects current holding period, not all-time first buy
+        LocalDate firstBuyDate = taxLotRepository.findOldestOpenLotDate(symbol).orElse(null);
+
+        // Day change: today vs yesterday close
+        List<HistoricalPrice> recentPrices = historicalPriceRepository
+                .findByAssetSymbolAndPriceDateBetweenOrderByPriceDateAsc(
+                        symbol, LocalDate.now().minusDays(5), LocalDate.now());
+        BigDecimal dayChange = null;
+        BigDecimal dayChangePct = null;
+        if (recentPrices.size() >= 2) {
+            BigDecimal today = recentPrices.get(recentPrices.size() - 1).getClose();
+            BigDecimal prev  = recentPrices.get(recentPrices.size() - 2).getClose();
+            dayChange = today.subtract(prev);
+            if (prev.compareTo(BigDecimal.ZERO) != 0)
+                dayChangePct = dayChange.divide(prev, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+        }
+
+        // Sparkline: last 30 trading days of closes
+        List<BigDecimal> sparkline = historicalPriceRepository
+                .findByAssetSymbolAndPriceDateBetweenOrderByPriceDateAsc(
+                        symbol, LocalDate.now().minusDays(45), LocalDate.now())
+                .stream()
+                .map(HistoricalPrice::getClose)
+                .collect(Collectors.toList());
+        if (sparkline.size() > 30) sparkline = sparkline.subList(sparkline.size() - 30, sparkline.size());
+
         return new PortfolioHoldingResponse(
                 first.getAsset().getId(),
-                first.getAsset().getSymbol(),
+                symbol,
                 first.getAsset().getName(),
                 totalQuantity,
                 totalCostBasis,
@@ -260,7 +295,11 @@ public class HoldingService {
                 first.getMarketPrice(),
                 marketValue,
                 unrealizedGain,
-                allocationPercent
+                allocationPercent,
+                firstBuyDate,
+                dayChange,
+                dayChangePct,
+                sparkline
         );
     }
 
