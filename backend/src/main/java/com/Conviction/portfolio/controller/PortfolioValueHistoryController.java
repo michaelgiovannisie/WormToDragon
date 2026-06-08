@@ -21,6 +21,7 @@ import com.conviction.holding.entity.Holding;
 import com.conviction.holding.repository.HoldingRepository;
 import com.conviction.portfolio.entity.Portfolio;
 import com.conviction.portfolio.repository.PortfolioRepository;
+import com.conviction.transaction.repository.TransactionRepository;
 
 @RestController
 @RequestMapping("/api/portfolios/{portfolioId}/value-history")
@@ -29,15 +30,18 @@ public class PortfolioValueHistoryController {
     private final PortfolioRepository portfolioRepository;
     private final HoldingRepository holdingRepository;
     private final HistoricalPriceRepository priceRepository;
+    private final TransactionRepository transactionRepository;
 
     public PortfolioValueHistoryController(
             PortfolioRepository portfolioRepository,
             HoldingRepository holdingRepository,
-            HistoricalPriceRepository priceRepository
+            HistoricalPriceRepository priceRepository,
+            TransactionRepository transactionRepository
     ) {
         this.portfolioRepository = portfolioRepository;
         this.holdingRepository = holdingRepository;
         this.priceRepository = priceRepository;
+        this.transactionRepository = transactionRepository;
     }
 
     @GetMapping
@@ -53,7 +57,11 @@ public class PortfolioValueHistoryController {
             case "3m"  -> now.minusMonths(3);
             case "6m"  -> now.minusMonths(6);
             case "ytd" -> now.withDayOfYear(1);
-            case "all" -> LocalDate.of(2000, 1, 1);
+            case "all" -> transactionRepository.findByAccountPortfolioId(portfolioId)
+                    .stream()
+                    .map(t -> t.getTransactionDate())
+                    .min(LocalDate::compareTo)
+                    .orElse(now.minusYears(1)); // fallback if no transactions
             default    -> now.minusYears(1);
         };
 

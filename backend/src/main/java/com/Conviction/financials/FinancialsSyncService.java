@@ -92,6 +92,16 @@ public class FinancialsSyncService {
             List<Map<String, Object>> metrics,
             List<Map<String, Object>> ratios) {
 
+        // Deduplicate income by date — FMP occasionally returns the same fiscal date
+        // twice (e.g. Apple's Sep quarter-end appears as both Q4 and a full-year row).
+        // Keep only the first occurrence (newest-first order is preserved).
+        java.util.Map<String, Map<String, Object>> seen = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> row : income) {
+            String d = str(row.get("date"));
+            if (d != null) seen.putIfAbsent(d, row);
+        }
+        income = new java.util.ArrayList<>(seen.values());
+
         // Pre-compute TTM (trailing twelve months) sums for quarterly metrics.
         // income is ordered newest-first, so TTM for row i = sum of income[i..i+3].
         // Used for: ROE, ROIC (NI), P/E (EPS), P/S (revenue), EV/EBITDA (ebitda).
@@ -200,13 +210,18 @@ public class FinancialsSyncService {
                         BigDecimal ttmR = ttmRev[i];
                         BigDecimal ttmB = ttmEbitda[i];
 
-                        snap.setPeRatio(ttmE != null && ttmE.compareTo(BigDecimal.ZERO) != 0
+                        // Only use TTM-based multiples when we have a full 4-quarter window.
+                        // For the oldest 1–3 rows the TTM sum is incomplete (< 4 quarters),
+                        // which inflates P/E dramatically — better to show null than a misleading number.
+                        boolean fullTtm = QUARTER.equals(period) ? (i + 4 <= n) : true;
+
+                        snap.setPeRatio(fullTtm && ttmE != null && ttmE.compareTo(BigDecimal.ZERO) != 0
                                 ? price.divide(ttmE, 2, RoundingMode.HALF_UP) : null);
-                        snap.setPsRatio(ttmR != null && ttmR.compareTo(BigDecimal.ZERO) != 0
+                        snap.setPsRatio(fullTtm && ttmR != null && ttmR.compareTo(BigDecimal.ZERO) != 0
                                 ? marketCap.divide(ttmR, 2, RoundingMode.HALF_UP) : null);
                         snap.setPbRatio(equity != null && equity.compareTo(BigDecimal.ZERO) != 0
                                 ? marketCap.divide(equity, 2, RoundingMode.HALF_UP) : null);
-                        if (ttmB != null && debt != null && cash != null && ttmB.compareTo(BigDecimal.ZERO) != 0) {
+                        if (fullTtm && ttmB != null && debt != null && cash != null && ttmB.compareTo(BigDecimal.ZERO) != 0) {
                             BigDecimal ev = marketCap.add(debt).subtract(cash);
                             snap.setEvToEbitda(ev.divide(ttmB, 2, RoundingMode.HALF_UP));
                         }

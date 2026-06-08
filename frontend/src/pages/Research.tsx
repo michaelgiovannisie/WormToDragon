@@ -492,7 +492,7 @@ export default function Research() {
                     );
                   };
 
-                  const mapped = rows.map(r => ({
+                  const allMapped = rows.map(r => ({
                     year:      fmt(r.date),
                     eps:       r.epsDiluted != null ? Number(r.epsDiluted) : null,
                     margin:    r.netMarginPct != null ? Number(r.netMarginPct) : null,
@@ -511,6 +511,15 @@ export default function Research() {
                     ps:        r.psRatio != null ? Number(r.psRatio) : null,
                     evEbitda:  r.evToEbitda != null ? Number(r.evToEbitda) : null,
                   }));
+
+                  // Deduplicate by year label — if two fiscal dates map to the same quarter
+                  // label (e.g. two FMP entries for "2023-09-30"), keep only the first (newest).
+                  const seenYears = new Set<string>();
+                  const mapped = allMapped.filter(r => {
+                    if (seenYears.has(r.year)) return false;
+                    seenYears.add(r.year);
+                    return true;
+                  });
 
                   const charts: Record<string, any[]> = {
                     profitability: [

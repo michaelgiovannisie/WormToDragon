@@ -95,7 +95,7 @@ export default function Dashboard() {
           disabled={syncing}
           style={{ background: C.gold, color: "#000", border: "none", borderRadius: "10px", padding: "10px 20px", fontWeight: 700, cursor: syncing ? "not-allowed" : "pointer", opacity: syncing ? 0.6 : 1 }}
         >
-          {syncing ? "Syncing..." : "⟳ Sync All Prices"}
+          {syncing ? "Syncing..." : "⟳ Sync Holdings"}
         </button>
         {syncMsg && <span style={{ color: C.muted, fontSize: "13px" }}>{syncMsg}</span>}
         <div style={{ marginLeft: "auto" }}>

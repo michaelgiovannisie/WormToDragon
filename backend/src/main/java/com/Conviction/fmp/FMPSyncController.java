@@ -100,7 +100,10 @@ public class FMPSyncController {
             try {
                 AssetResponse profile = profileSync.sync(sym);
                 FMPKeyMetricsResponse metrics = keyMetricsSync.sync(sym);
-                List<HistoricalPriceResponse> prices = historicalSync.syncFull(sym);
+                // 3-month top-up — full history already loaded, just catch up recent bars
+                java.time.LocalDate threeMonthsAgo = java.time.LocalDate.now().minusMonths(3);
+                List<HistoricalPriceResponse> prices = historicalSync.sync(sym, threeMonthsAgo, null);
+                if (prices.isEmpty()) prices = historicalSync.sync(sym.replace('.', '-'), threeMonthsAgo, null);
                 if (prices.isEmpty()) prices = yahooSync.syncFull(sym);
                 int holdingsUpdated = holdingService.refreshPricesForSymbol(sym);
                 results.add(new FMPSyncAllResponse(sym, profile, metrics, prices.size(), holdingsUpdated));
