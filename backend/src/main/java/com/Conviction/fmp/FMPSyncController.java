@@ -78,6 +78,8 @@ public class FMPSyncController {
         AssetResponse profile = profileSync.sync(sym);
         FMPKeyMetricsResponse metrics = keyMetricsSync.sync(sym);
         List<HistoricalPriceResponse> prices = historicalSync.syncFull(sym);
+        // FMP may also accept hyphen variant for class shares (BRK.A → BRK-A)
+        if (prices.isEmpty()) prices = historicalSync.syncFull(sym.replace('.', '-'));
         if (prices.isEmpty()) prices = yahooSync.syncFull(sym);
         int holdingsUpdated = holdingService.refreshPricesForSymbol(sym);
         return new FMPSyncAllResponse(sym, profile, metrics, prices.size(), holdingsUpdated);

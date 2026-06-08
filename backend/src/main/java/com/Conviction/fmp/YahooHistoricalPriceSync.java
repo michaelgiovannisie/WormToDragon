@@ -29,8 +29,10 @@ public class YahooHistoricalPriceSync {
 
     @SuppressWarnings("unchecked")
     public List<HistoricalPriceResponse> syncFull(String symbol) {
+        // Yahoo Finance uses hyphens for class shares: BRK.A → BRK-A, BRK.B → BRK-B
+        String yahooSymbol = symbol.replace('.', '-');
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/"
-                + symbol + "?range=2y&interval=1d";
+                + yahooSymbol + "?range=2y&interval=1d";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("User-Agent", "Mozilla/5.0");

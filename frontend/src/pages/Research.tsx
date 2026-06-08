@@ -136,7 +136,7 @@ export default function Research() {
       setFinancials(finRows);
       const finStatus = finRows.length > 0
         ? `financials OK (${finRows.length} years)`
-        : "financials unavailable (FMP quota exceeded)";
+        : "no financial data available for this symbol";
       setSyncMsg(`Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, ${finStatus}.`);
       // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
       const eps = data.metrics?.epsTTM;
@@ -334,7 +334,7 @@ export default function Research() {
               </div>
               {syncMsg && <p style={{
                 color: syncMsg.startsWith("Sync failed") ? C.red
-                     : syncMsg.includes("unavailable") ? C.gold
+                     : syncMsg.includes("no financial data") ? C.gold
                      : C.green,
                 fontSize: "12px", margin: 0
               }}>{syncMsg}</p>}

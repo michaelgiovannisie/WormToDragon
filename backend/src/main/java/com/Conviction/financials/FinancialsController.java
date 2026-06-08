@@ -35,13 +35,20 @@ public class FinancialsController {
 
     /** Fetch from FMP and persist — called by Sync from FMP button. */
     @PostMapping("/{symbol}/sync")
-    public FinancialsResponse syncFinancials(@PathVariable String symbol) {
+    public org.springframework.http.ResponseEntity<FinancialsResponse> syncFinancials(@PathVariable String symbol) {
         String sym = symbol.toUpperCase();
 
         List<Map<String, Object>> income   = fetch("/income-statement",        sym);
         List<Map<String, Object>> balance  = fetch("/balance-sheet-statement", sym);
         List<Map<String, Object>> cashflow = fetch("/cash-flow-statement",     sym);
         List<Map<String, Object>> metrics  = fetch("/key-metrics",             sym);
+
+        if (income.isEmpty()) {
+            // FMP returned no income statement data — not a quota issue, just no data for this symbol
+            return org.springframework.http.ResponseEntity.ok(
+                new FinancialsResponse(sym, List.of())
+            );
+        }
 
         for (int i = 0; i < income.size(); i++) {
             Map<String, Object> inc = income.get(i);
@@ -83,7 +90,7 @@ public class FinancialsController {
             repo.save(snap);
         }
 
-        return getFinancials(sym);
+        return org.springframework.http.ResponseEntity.ok(getFinancials(sym));
     }
 
     @SuppressWarnings("unchecked")
