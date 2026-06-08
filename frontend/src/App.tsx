@@ -5,6 +5,8 @@ import Holdings   from "./pages/Holdings";
 import Research   from "./pages/Research";
 import Tax        from "./pages/Tax";
 import Import     from "./pages/Import";
+import Discover   from "./pages/Discover";
+import Watchlist  from "./pages/Watchlist";
 import { C }      from "./theme";
 
 export default function App() {
@@ -14,11 +16,13 @@ export default function App() {
         <Sidebar />
         <main style={{ marginLeft: "240px", padding: "48px", minHeight: "100vh", boxSizing: "border-box" }}>
           <Routes>
-            <Route path="/"         element={<Dashboard />} />
-            <Route path="/holdings" element={<Holdings />}  />
-            <Route path="/research" element={<Research />}  />
-            <Route path="/tax"      element={<Tax />}       />
-            <Route path="/import"   element={<Import />}    />
+            <Route path="/"          element={<Dashboard />} />
+            <Route path="/holdings"  element={<Holdings />}  />
+            <Route path="/research"  element={<Research />}  />
+            <Route path="/tax"       element={<Tax />}       />
+            <Route path="/import"    element={<Import />}    />
+            <Route path="/discover"  element={<Discover />}  />
+            <Route path="/watchlist" element={<Watchlist />} />
           </Routes>
         </main>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API, ACCOUNT_ID } from "../constants";
+import { API, ACCOUNT_ID, PORTFOLIO_ID } from "../constants";
 import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
 
 export default function Tax() {
@@ -9,6 +9,8 @@ export default function Tax() {
   const [loading, setLoading]         = useState(true);
   const [filterSymbol, setFilterSymbol] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL"|"OPEN"|"CLOSED">("ALL");
+  const [taxStrategy, setTaxStrategy]   = useState<string>("FIFO");
+  const [strategyMsg, setStrategyMsg]   = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API}/holdings/account/${ACCOUNT_ID}`)
@@ -27,7 +29,30 @@ export default function Tax() {
         setLoading(false);
       })
       .catch(e => { console.error(e); setLoading(false); });
+
+    fetch(`${API}/portfolios/${PORTFOLIO_ID}`)
+      .then(r => r.json())
+      .then(d => setTaxStrategy(d.taxStrategy ?? "FIFO"))
+      .catch(console.error);
   }, []);
+
+  const updateTaxStrategy = async (strategy: string) => {
+    const previous = taxStrategy;
+    setTaxStrategy(strategy);
+    setStrategyMsg(null);
+    try {
+      const res = await fetch(`${API}/portfolios/${PORTFOLIO_ID}/tax-strategy`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taxStrategy: strategy }),
+      });
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      setStrategyMsg(`Tax method set to ${strategy}. Rebuild positions to apply.`);
+    } catch {
+      setTaxStrategy(previous);
+      setStrategyMsg("Failed to update tax strategy.");
+    }
+  };
 
   const totalRealized  = allAllocs.reduce((sum, a) => sum + Number(a.realizedGain ?? 0), 0);
   const now            = new Date();
@@ -70,9 +95,24 @@ export default function Tax() {
     <div style={{ color: C.text, fontFamily: C.font }}>
       <p style={labelStyle}>Tax Intelligence</p>
       <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>Tax Center</h2>
-      <p style={{ color: C.muted, marginBottom: "40px" }}>
+      <p style={{ color: C.muted, marginBottom: "24px" }}>
         Realized gains, tax lots, and FIFO allocation audit across all positions.
       </p>
+
+      {/* Tax method selector */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "40px", flexWrap: "wrap" }}>
+        <span style={{ color: C.muted, fontSize: "13px" }}>Cost Basis Method</span>
+        {["FIFO", "LIFO", "SPECIFIC_LOT"].map(s => (
+          <button key={s} onClick={() => updateTaxStrategy(s)} style={{
+            padding: "6px 14px", borderRadius: "999px", cursor: "pointer",
+            fontFamily: C.font, fontSize: "12px",
+            background: taxStrategy === s ? "rgba(200,169,106,0.15)" : "transparent",
+            color: taxStrategy === s ? C.gold : C.muted,
+            border: taxStrategy === s ? `1px solid ${C.gold}` : `1px solid ${C.borderSubtle}`,
+          }}>{s}</button>
+        ))}
+        {strategyMsg && <span style={{ color: C.gold, fontSize: "12px" }}>{strategyMsg}</span>}
+      </div>
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px", marginBottom: "32px" }}>

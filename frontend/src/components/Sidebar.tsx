@@ -2,11 +2,13 @@ import { NavLink } from "react-router-dom";
 import { C } from "../theme";
 
 const NAV = [
-  { to: "/",        label: "Dashboard" },
-  { to: "/holdings", label: "Holdings"  },
-  { to: "/research", label: "Research"  },
-  { to: "/tax",      label: "Tax"       },
-  { to: "/import",   label: "Import"    },
+  { to: "/",          label: "Dashboard" },
+  { to: "/holdings",  label: "Holdings"  },
+  { to: "/research",  label: "Research"  },
+  { to: "/discover",  label: "Discover"  },
+  { to: "/watchlist", label: "Watchlist" },
+  { to: "/tax",       label: "Tax"       },
+  { to: "/import",    label: "Import"    },
 ];
 
 export default function Sidebar() {
