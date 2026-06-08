@@ -80,6 +80,7 @@ export default function Research() {
 
     fetch(`${API}/financials/${symbol}`)
       .then(r => r.json()).then(d => setFinancials(d?.annual ?? [])).catch(console.error);
+    // ^^^ reads from DB (no FMP call) — use Sync to refresh
   }, [symbol]);
 
   const selectSymbol = (s: string) => {
@@ -116,12 +117,14 @@ export default function Research() {
       const data = await res.json();
       setSyncMsg(`Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated.`);
       // Reload prices and detail
-      const [newPrices, newDetail] = await Promise.all([
+      const [newPrices, newDetail, newFin] = await Promise.all([
         fetch(`${API}/historical-prices/${symbol}`).then(r => r.json()),
         fetch(`${API}/assets/${symbol}/detail`).then(r => r.json()),
+        fetch(`${API}/financials/${symbol}/sync`, { method: "POST" }).then(r => r.json()),
       ]);
       setPrices(Array.isArray(newPrices) ? newPrices : []);
       setDetail(newDetail);
+      setFinancials(newFin?.annual ?? []);
       // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
       const eps = data.metrics?.epsTTM;
       const price = newDetail?.holding?.marketPrice;
@@ -391,7 +394,7 @@ export default function Research() {
             </div>
 
             {financials.length === 0
-              ? <p style={{ color: C.muted }}>No financial data — click "Sync from FMP" to load.</p>
+              ? <p style={{ color: C.muted }}>No financial data yet. Click "Sync from FMP" to load — if it still shows empty after syncing, the FMP free tier daily quota (250 req/day) may be exhausted. Try again tomorrow.</p>
               : (() => {
                   const rows = [...financials].reverse();
                   const fmt = (d: string) => d?.slice(0, 4) ?? "";
