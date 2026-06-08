@@ -25,15 +25,22 @@ public class FMPKeyMetricsSync {
     public FMPKeyMetricsResponse sync(String symbol) {
         List<Map<String, Object>> result = fmp.get("/key-metrics-ttm", List.class, "symbol", symbol);
 
-        if (result == null || result.isEmpty()) {
-            return new FMPKeyMetricsResponse(symbol, null, null, null);
+        BigDecimal peRatioTTM = null;
+        BigDecimal revenueGrowth = null;
+        if (result != null && !result.isEmpty()) {
+            Map<String, Object> m = result.get(0);
+            peRatioTTM = toBD(m.get("peRatioTTM"));
+            revenueGrowth = toBD(m.get("revenueGrowthTTM"));
         }
 
-        Map<String, Object> m = result.get(0);
-
-        BigDecimal epsTTM   = toBD(m.get("netIncomePerShareTTM"));
-        BigDecimal peRatioTTM = toBD(m.get("peRatioTTM"));
-        BigDecimal revenueGrowth = toBD(m.get("revenueGrowthTTM"));
+        // EPS comes from the income statement TTM endpoint
+        BigDecimal epsTTM = null;
+        List<Map<String, Object>> incomeResult = fmp.get(
+                "/income-statement", List.class,
+                "symbol", symbol, "period", "ttm", "limit", "1");
+        if (incomeResult != null && !incomeResult.isEmpty()) {
+            epsTTM = toBD(incomeResult.get(0).get("epsDiluted"));
+        }
 
         Asset asset = assetRepository.findBySymbol(symbol.toUpperCase()).orElse(null);
         if (asset instanceof Equity eq) {

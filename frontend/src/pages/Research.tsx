@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, ReferenceLine,
+  CartesianGrid, ReferenceLine, BarChart, Bar, Cell,
 } from "recharts";
 import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
@@ -34,7 +34,10 @@ export default function Research() {
     discountRatePercent: "", years: "10", terminalMultiple: "",
   });
   const [submitting, setSubmitting]     = useState(false);
+  const [priceRange, setPriceRange]     = useState("1y");
   const searchTimeout                   = useRef<number | null>(null);
+
+  const PRICE_RANGES = ["1w","1m","3m","6m","ytd","1y","all"];
 
   // Sync URL param → symbol state
   useEffect(() => {
@@ -57,6 +60,8 @@ export default function Research() {
   useEffect(() => {
     if (!symbol) { setDetail(null); setPrices([]); return; }
     setDetail(null);
+    setPrices([]);
+    setPriceRange("1y");
     setSearchParams({ symbol });
 
     fetch(`${API}/assets/${symbol}/detail`)
@@ -72,6 +77,9 @@ export default function Research() {
 
     fetch(`${API}/dca/${symbol}/all?availableCash=${dcaCash}`)
       .then(r => r.json()).then(setDcaRecs).catch(console.error);
+
+    fetch(`${API}/financials/${symbol}`)
+      .then(r => r.json()).then(d => setFinancials(d?.annual ?? [])).catch(console.error);
   }, [symbol]);
 
   const selectSymbol = (s: string) => {
@@ -93,8 +101,10 @@ export default function Research() {
       .then(r => r.json()).then(setDcaRecs).catch(console.error);
   };
 
-  const [syncing, setSyncing]     = useState(false);
-  const [syncMsg, setSyncMsg]     = useState<string | null>(null);
+  const [financials, setFinancials] = useState<any[]>([]);
+  const [finTab, setFinTab]         = useState<"profitability"|"growth"|"health">("profitability");
+  const [syncing, setSyncing]       = useState(false);
+  const [syncMsg, setSyncMsg]       = useState<string | null>(null);
 
   const syncFromFMP = async () => {
     if (!symbol) return;
@@ -193,10 +203,19 @@ export default function Research() {
   const holding        = detail?.holding;
   const avgCost        = holding ? Number(holding.averageCostBasis) : null;
 
-  const priceChartData = prices.map((p: any) => ({
-    date: p.priceDate,
-    close: Number(p.close),
-  }));
+  const priceChartData = (() => {
+    const all = prices.map((p: any) => ({ date: p.priceDate, close: Number(p.close) }));
+    if (priceRange === "all" || all.length === 0) return all;
+    const now = new Date();
+    let cutoff: Date;
+    if (priceRange === "1w")  cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    else if (priceRange === "1m")  cutoff = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    else if (priceRange === "3m")  cutoff = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    else if (priceRange === "6m")  cutoff = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    else if (priceRange === "ytd") cutoff = new Date(now.getFullYear(), 0, 1);
+    else                           cutoff = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); // 1y
+    return all.filter(p => new Date(p.date + "T00:00:00") >= cutoff);
+  })();
 
   const valTrendData = [...scenarios].reverse().slice(0, 10).map((s: any) => ({
     date: new Date(s.createdAt).toLocaleDateString(),
@@ -312,13 +331,29 @@ export default function Research() {
 
           {/* Price History Chart */}
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <p style={labelStyle}>Price History</p>
-            <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>
-              {symbol} — Historical Close Price
-              {avgCost && <span style={{ color: C.muted, fontSize: "14px", marginLeft: "16px" }}>
-                avg cost ${avgCost.toFixed(2)}
-              </span>}
-            </h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+              <div>
+                <p style={labelStyle}>Price History</p>
+                <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>
+                  {symbol} — Historical Close Price
+                  {avgCost && <span style={{ color: C.muted, fontSize: "14px", marginLeft: "16px" }}>
+                    avg cost ${avgCost.toFixed(2)}
+                  </span>}
+                </h3>
+              </div>
+              <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                {PRICE_RANGES.map(r => (
+                  <button key={r} onClick={() => setPriceRange(r)} style={{
+                    background: priceRange === r ? C.gold : "transparent",
+                    color: priceRange === r ? "#000" : C.muted,
+                    border: `1px solid ${priceRange === r ? C.gold : C.border}`,
+                    borderRadius: "8px", padding: "4px 10px", fontSize: "12px",
+                    fontWeight: priceRange === r ? 700 : 400,
+                    cursor: "pointer", textTransform: "uppercase",
+                  }}>{r}</button>
+                ))}
+              </div>
+            </div>
             {priceChartData.length === 0
               ? <p style={{ color: C.muted }}>No price data yet — click "Sync from FMP" to load history.</p>
               : <ResponsiveContainer width="100%" height={300}>
@@ -334,6 +369,112 @@ export default function Research() {
                     <Line type="monotone" dataKey="close" stroke={C.green} strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
+            }
+          </section>
+
+          {/* Financial Metrics */}
+          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+            <p style={labelStyle}>Financials</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
+              <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Key Metrics (Annual)</h3>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {(["profitability","growth","health"] as const).map(tab => (
+                  <button key={tab} onClick={() => setFinTab(tab)} style={{
+                    padding: "8px 20px", borderRadius: "999px", cursor: "pointer",
+                    fontFamily: C.font, fontSize: "13px", textTransform: "capitalize",
+                    background: finTab === tab ? "rgba(200,169,106,0.15)" : "transparent",
+                    color: finTab === tab ? C.gold : C.muted,
+                    border: finTab === tab ? `1px solid ${C.gold}` : `1px solid ${C.borderSubtle}`,
+                  }}>{tab}</button>
+                ))}
+              </div>
+            </div>
+
+            {financials.length === 0
+              ? <p style={{ color: C.muted }}>No financial data — click "Sync from FMP" to load.</p>
+              : (() => {
+                  const rows = [...financials].reverse();
+                  const fmt = (d: string) => d?.slice(0, 4) ?? "";
+                  const bil = (v: number) => v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : `$${v}`;
+
+                  const barColor = (data: any[], key: string) => {
+                    if (data.length < 2) return () => C.gold;
+                    const first = Number(data[0]?.[key] ?? 0);
+                    const last  = Number(data[data.length - 1]?.[key] ?? 0);
+                    const trend = last >= first ? C.green : C.red;
+                    return (_: any, i: number) => i === data.length - 1 ? trend : "rgba(200,169,106,0.4)";
+                  };
+
+                  const MetricChart = ({ title, dataKey, data, formatter, unit = "" }: any) => {
+                    const colorFn = barColor(data, dataKey);
+                    return (
+                      <div>
+                        <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>{title}</p>
+                        <ResponsiveContainer width="100%" height={180}>
+                          <BarChart data={data} barSize={20}>
+                            <CartesianGrid stroke="rgba(200,169,106,0.06)" vertical={false} />
+                            <XAxis dataKey="year" stroke={C.muted} tick={{ fontSize: 11 }} />
+                            <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={formatter} width={48} />
+                            <Tooltip
+                              contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "10px", fontFamily: C.font }}
+                              labelStyle={{ color: C.muted, fontSize: "12px" }}
+                              itemStyle={{ color: C.text }}
+                              formatter={(v: any) => [formatter(Number(v)) + unit, title]}
+                            />
+                            <Bar dataKey={dataKey} radius={[4,4,0,0]}>
+                              {data.map((_: any, i: number) => <Cell key={i} fill={colorFn(_, i)} />)}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  };
+
+                  const mapped = rows.map(r => ({
+                    year:    fmt(r.date),
+                    eps:     r.epsDiluted != null ? Number(r.epsDiluted) : null,
+                    margin:  r.netMarginPct != null ? Number(r.netMarginPct) : null,
+                    roe:     r.roePct != null ? Number(r.roePct) : null,
+                    roic:    r.roicPct != null ? Number(r.roicPct) : null,
+                    revenue: r.revenue != null ? Number(r.revenue) : null,
+                    netIncome: r.netIncome != null ? Number(r.netIncome) : null,
+                    ocf:     r.operatingCashFlow != null ? Number(r.operatingCashFlow) : null,
+                    fcf:     r.freeCashFlow != null ? Number(r.freeCashFlow) : null,
+                    debt:    r.totalDebt != null ? Number(r.totalDebt) : null,
+                    cash:    r.cash != null ? Number(r.cash) : null,
+                    de:      r.debtToEquity != null ? Number(r.debtToEquity) : null,
+                    cr:      r.currentRatio != null ? Number(r.currentRatio) : null,
+                  }));
+
+                  const charts: Record<string, any[]> = {
+                    profitability: [
+                      { title: "EPS (Diluted)",    dataKey: "eps",    formatter: (v: number) => `$${v.toFixed(2)}` },
+                      { title: "Net Margin %",     dataKey: "margin", formatter: (v: number) => `${v.toFixed(1)}%` },
+                      { title: "Return on Equity", dataKey: "roe",    formatter: (v: number) => `${v.toFixed(1)}%` },
+                      { title: "ROIC",             dataKey: "roic",   formatter: (v: number) => `${v.toFixed(1)}%` },
+                    ],
+                    growth: [
+                      { title: "Revenue",              dataKey: "revenue",    formatter: bil },
+                      { title: "Net Income",           dataKey: "netIncome",  formatter: bil },
+                      { title: "Operating Cash Flow",  dataKey: "ocf",        formatter: bil },
+                      { title: "Free Cash Flow",       dataKey: "fcf",        formatter: bil },
+                    ],
+                    health: [
+                      { title: "Total Debt",     dataKey: "debt", formatter: bil },
+                      { title: "Cash & Equiv.",  dataKey: "cash", formatter: bil },
+                      { title: "Debt / Equity",  dataKey: "de",   formatter: (v: number) => `${v.toFixed(2)}x` },
+                      { title: "Current Ratio",  dataKey: "cr",   formatter: (v: number) => `${v.toFixed(2)}x` },
+                    ],
+                  };
+
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
+                      {charts[finTab].map((c: any) => (
+                        <MetricChart key={c.dataKey} {...c} data={mapped} />
+                      ))}
+                    </div>
+                  );
+                })()
             }
           </section>
 

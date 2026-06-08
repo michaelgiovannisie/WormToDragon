@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [syncMsg, setSyncMsg]           = useState<string | null>(null);
   const [chartRange, setChartRange]     = useState("1y");
 
-  const RANGES = ["1d","1w","1m","3m","ytd","1y","all"];
+  const RANGES = ["1w","1m","3m","ytd","1y","all"];
 
   const loadData = (range = chartRange) => {
     fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`)
@@ -134,7 +134,7 @@ export default function Dashboard() {
               <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 12 }} />
               <YAxis stroke={C.muted} tick={{ fontSize: 12 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
               <Tooltip {...tooltipStyle} formatter={(v: any) => [`$${Number(v).toLocaleString()}`, "Value"]} />
-              <Line type="monotone" dataKey="value" stroke={C.gold} strokeWidth={3} dot={{ r: 3, fill: C.gold }} />
+              <Line type="monotone" dataKey="value" stroke={C.green} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </section>
