@@ -20,7 +20,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Entity
 @Table(name = "financial_snapshots",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"symbol", "fiscal_year"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"symbol", "fiscal_year", "period"}))
 public class FinancialSnapshot {
 
     @Id
@@ -31,6 +31,10 @@ public class FinancialSnapshot {
 
     @Column(name = "fiscal_year")
     private String fiscalYear;
+
+    /** "annual" or "quarter". Null treated as "annual" for backwards compatibility. */
+    @Column(nullable = true)
+    private String period;
 
     private BigDecimal revenue;
     private BigDecimal netIncome;
@@ -44,6 +48,17 @@ public class FinancialSnapshot {
     private BigDecimal currentRatio;
     private BigDecimal roePct;
     private BigDecimal roicPct;
+
+    // Used for manual valuation multiple calculation
+    private Long sharesOutstanding;
+    private BigDecimal ebitda;
+    private BigDecimal totalStockholdersEquity;
+
+    // Valuation multiples — from /ratios (annual) or computed from price + statements (quarterly)
+    private BigDecimal peRatio;
+    private BigDecimal pbRatio;
+    private BigDecimal psRatio;
+    private BigDecimal evToEbitda;
 
     private LocalDateTime updatedAt;
 }

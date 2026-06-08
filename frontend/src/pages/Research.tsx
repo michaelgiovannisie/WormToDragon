@@ -81,7 +81,7 @@ export default function Research() {
       .then(r => r.json()).then(setDcaRecs).catch(console.error);
 
     fetch(`${API}/financials/${symbol}`)
-      .then(r => r.json()).then(d => setFinancials(d?.annual ?? [])).catch(console.error);
+      .then(r => r.json()).then(d => setFinancials({ annual: d?.annual ?? [], quarterly: d?.quarterly ?? [] })).catch(console.error);
     // ^^^ reads from DB (no FMP call) — use Sync to refresh
   }, [symbol]);
 
@@ -111,8 +111,9 @@ export default function Research() {
       .then(r => r.json()).then(setDcaRecs).catch(console.error);
   };
 
-  const [financials, setFinancials] = useState<any[]>([]);
-  const [finTab, setFinTab]         = useState<"profitability"|"growth"|"health">("profitability");
+  const [financials, setFinancials]   = useState<{ annual: any[], quarterly: any[] }>({ annual: [], quarterly: [] });
+  const [finTab, setFinTab]           = useState<"profitability"|"growth"|"health"|"valuation">("profitability");
+  const [finPeriod, setFinPeriod]     = useState<"annual"|"quarter">("annual");
   const [syncing, setSyncing]       = useState(false);
   const [syncMsg, setSyncMsg]       = useState<string | null>(null);
 
@@ -132,12 +133,12 @@ export default function Research() {
       ]);
       setPrices(Array.isArray(newPrices) ? newPrices : []);
       setDetail(newDetail);
-      const finRows = newFin?.annual ?? [];
+      const finRows = { annual: newFin?.annual ?? [], quarterly: newFin?.quarterly ?? [] };
       setFinancials(finRows);
-      const finStatus = finRows.length > 0
-        ? `financials OK (${finRows.length} years)`
-        : "no financial data available for this symbol";
-      setSyncMsg(`Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, ${finStatus}.`);
+      setSyncMsg(finRows.annual.length > 0
+        ? `Synced: ${data.historicalPricesSynced} price bars, profile + metrics + financials updated.`
+        : `Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, no financial data for this symbol.`
+      );
       // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
       const eps = data.metrics?.epsTTM;
       const price = newDetail?.holding?.marketPrice;
@@ -405,9 +406,23 @@ export default function Research() {
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
             <p style={labelStyle}>Financials</p>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
-              <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Key Metrics (Annual)</h3>
+              <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>
+                Key Metrics ({finPeriod === "annual" ? "Annual" : "Quarterly"})
+              </h3>
               <div style={{ display: "flex", gap: "8px" }}>
-                {(["profitability","growth","health"] as const).map(tab => (
+                {/* Period toggle */}
+                {(["annual","quarter"] as const).map(p => (
+                  <button key={p} onClick={() => setFinPeriod(p)} style={{
+                    padding: "8px 20px", borderRadius: "999px", cursor: "pointer",
+                    fontFamily: C.font, fontSize: "13px",
+                    background: finPeriod === p ? "rgba(200,169,106,0.15)" : "transparent",
+                    color: finPeriod === p ? C.gold : C.muted,
+                    border: finPeriod === p ? `1px solid ${C.gold}` : `1px solid ${C.borderSubtle}`,
+                  }}>{p === "annual" ? "Annual" : "Quarterly"}</button>
+                ))}
+                <div style={{ width: "1px", background: C.borderSubtle, margin: "0 4px" }} />
+                {/* Sub-tab toggle */}
+                {(["profitability","growth","health","valuation"] as const).map(tab => (
                   <button key={tab} onClick={() => setFinTab(tab)} style={{
                     padding: "8px 20px", borderRadius: "999px", cursor: "pointer",
                     fontFamily: C.font, fontSize: "13px", textTransform: "capitalize",
@@ -419,11 +434,25 @@ export default function Research() {
               </div>
             </div>
 
-            {financials.length === 0
+            {financials.annual.length === 0
               ? <p style={{ color: C.muted }}>No financial data yet — click ⟳ Sync to load.</p>
               : (() => {
-                  const rows = [...financials].reverse();
-                  const fmt = (d: string) => d?.slice(0, 4) ?? "";
+                  const activeRows = finPeriod === "annual"
+                    ? [...financials.annual].reverse()
+                    : [...financials.quarterly].reverse();
+
+                  const rows = activeRows;
+
+                  // Annual: "2024", Quarterly: "Q1 '24"
+                  const fmt = (d: string) => {
+                    if (!d) return "";
+                    if (finPeriod === "annual") return d.slice(0, 4);
+                    // FMP quarterly date format: "2024-03-30" — derive quarter from month
+                    const [year, month] = d.split("-");
+                    const m = parseInt(month, 10);
+                    const q = m <= 3 ? "Q1" : m <= 6 ? "Q2" : m <= 9 ? "Q3" : "Q4";
+                    return `${q} '${year.slice(2)}`;
+                  };
                   const bil = (v: number) => v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : `$${v}`;
 
                   const barColor = (data: any[], key: string) => {
@@ -460,19 +489,23 @@ export default function Research() {
                   };
 
                   const mapped = rows.map(r => ({
-                    year:    fmt(r.date),
-                    eps:     r.epsDiluted != null ? Number(r.epsDiluted) : null,
-                    margin:  r.netMarginPct != null ? Number(r.netMarginPct) : null,
-                    roe:     r.roePct != null ? Number(r.roePct) : null,
-                    roic:    r.roicPct != null ? Number(r.roicPct) : null,
-                    revenue: r.revenue != null ? Number(r.revenue) : null,
+                    year:      fmt(r.date),
+                    eps:       r.epsDiluted != null ? Number(r.epsDiluted) : null,
+                    margin:    r.netMarginPct != null ? Number(r.netMarginPct) : null,
+                    roe:       r.roePct != null ? Number(r.roePct) : null,
+                    roic:      r.roicPct != null ? Number(r.roicPct) : null,
+                    revenue:   r.revenue != null ? Number(r.revenue) : null,
                     netIncome: r.netIncome != null ? Number(r.netIncome) : null,
-                    ocf:     r.operatingCashFlow != null ? Number(r.operatingCashFlow) : null,
-                    fcf:     r.freeCashFlow != null ? Number(r.freeCashFlow) : null,
-                    debt:    r.totalDebt != null ? Number(r.totalDebt) : null,
-                    cash:    r.cash != null ? Number(r.cash) : null,
-                    de:      r.debtToEquity != null ? Number(r.debtToEquity) : null,
-                    cr:      r.currentRatio != null ? Number(r.currentRatio) : null,
+                    ocf:       r.operatingCashFlow != null ? Number(r.operatingCashFlow) : null,
+                    fcf:       r.freeCashFlow != null ? Number(r.freeCashFlow) : null,
+                    debt:      r.totalDebt != null ? Number(r.totalDebt) : null,
+                    cash:      r.cash != null ? Number(r.cash) : null,
+                    de:        r.debtToEquity != null ? Number(r.debtToEquity) : null,
+                    cr:        r.currentRatio != null ? Number(r.currentRatio) : null,
+                    pe:        r.peRatio != null ? Number(r.peRatio) : null,
+                    pb:        r.pbRatio != null ? Number(r.pbRatio) : null,
+                    ps:        r.psRatio != null ? Number(r.psRatio) : null,
+                    evEbitda:  r.evToEbitda != null ? Number(r.evToEbitda) : null,
                   }));
 
                   const charts: Record<string, any[]> = {
@@ -494,7 +527,17 @@ export default function Research() {
                       { title: "Debt / Equity",  dataKey: "de",   formatter: (v: number) => `${v.toFixed(2)}x` },
                       { title: "Current Ratio",  dataKey: "cr",   formatter: (v: number) => `${v.toFixed(2)}x` },
                     ],
+                    valuation: [
+                      { title: "P/E Ratio",    dataKey: "pe",      formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "P/B Ratio",    dataKey: "pb",      formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "P/S Ratio",    dataKey: "ps",      formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "EV / EBITDA",  dataKey: "evEbitda",formatter: (v: number) => `${v.toFixed(1)}x` },
+                    ],
                   };
+
+                  if (rows.length === 0) {
+                    return <p style={{ color: C.muted }}>No quarterly data — click ⟳ Sync to load.</p>;
+                  }
 
                   return (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>

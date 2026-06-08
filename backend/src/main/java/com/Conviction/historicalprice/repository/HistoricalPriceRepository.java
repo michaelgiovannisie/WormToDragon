@@ -29,5 +29,10 @@ public interface HistoricalPriceRepository
             String symbol
     );
 
+    Optional<HistoricalPrice> findTopByAssetSymbolAndPriceDateLessThanEqualOrderByPriceDateDesc(
+            String symbol,
+            LocalDate priceDate
+    );
+
     boolean existsByAssetIdAndPriceDate(UUID assetId, LocalDate priceDate);
 }
