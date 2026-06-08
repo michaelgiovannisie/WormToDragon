@@ -60,7 +60,12 @@ export default function Research() {
     setSearchParams({ symbol });
 
     fetch(`${API}/assets/${symbol}/detail`)
-      .then(r => r.json()).then(setDetail).catch(console.error);
+      .then(r => r.json()).then(d => {
+        setDetail(d);
+        if (d?.holding?.marketPrice != null) {
+          setFormVals(prev => ({ ...prev, currentPrice: String(d.holding.marketPrice) }));
+        }
+      }).catch(console.error);
 
     fetch(`${API}/historical-prices/${symbol}`)
       .then(r => r.json()).then(d => setPrices(Array.isArray(d) ? d : [])).catch(console.error);
@@ -107,16 +112,14 @@ export default function Research() {
       ]);
       setPrices(Array.isArray(newPrices) ? newPrices : []);
       setDetail(newDetail);
-      // Pre-fill valuation form with fresh metrics
-      if (data.metrics) {
-        setFormVals(prev => ({
-          ...prev,
-          earningsPerShare: data.metrics.epsTTM != null ? String(data.metrics.epsTTM) : prev.earningsPerShare,
-          currentPrice: data.profile?.holding?.marketPrice != null
-            ? String(data.profile.holding.marketPrice)
-            : prev.currentPrice,
-        }));
-      }
+      // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
+      const eps = data.metrics?.epsTTM;
+      const price = newDetail?.holding?.marketPrice;
+      setFormVals(prev => ({
+        ...prev,
+        ...(eps != null ? { earningsPerShare: String(eps) } : {}),
+        ...(price != null ? { currentPrice: String(price) } : {}),
+      }));
     } catch (e: any) {
       setSyncMsg("Sync failed: " + e.message);
     } finally {
@@ -317,11 +320,11 @@ export default function Research() {
               </span>}
             </h3>
             {priceChartData.length === 0
-              ? <p style={{ color: C.muted }}>No historical price data yet. Use POST /api/historical-prices/{symbol} to load data.</p>
+              ? <p style={{ color: C.muted }}>No price data yet — click "Sync from FMP" to load history.</p>
               : <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={priceChartData}>
                     <CartesianGrid stroke="rgba(200,169,106,0.08)" vertical={false} />
-                    <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 11 }} />
+                    <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={60} />
                     <YAxis stroke={C.muted} tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
                     <Tooltip {...tooltipStyle} formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Close"]} />
                     {avgCost && (

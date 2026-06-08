@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.conviction.asset.repository.AssetRepository;
 import com.conviction.assetdetail.dto.AssetDetailResponse;
 import com.conviction.holding.dto.HoldingResponse;
 import com.conviction.holding.mapper.HoldingMapper;
@@ -30,6 +31,7 @@ public class AssetDetailService {
     private final TaxLotRepository taxLotRepository;
     private final TaxLotAllocationRepository allocationRepository;
     private final TaxLotMapper taxLotMapper;
+    private final AssetRepository assetRepository;
 
     public AssetDetailService(
         HoldingRepository holdingRepository,
@@ -39,7 +41,8 @@ public class AssetDetailService {
         TransactionRepository transactionRepository,
         TaxLotRepository taxLotRepository,
         TaxLotAllocationRepository allocationRepository,
-        TaxLotMapper taxLotMapper
+        TaxLotMapper taxLotMapper,
+        AssetRepository assetRepository
     ) {
         this.holdingRepository = holdingRepository;
         this.holdingMapper = holdingMapper;
@@ -49,9 +52,14 @@ public class AssetDetailService {
         this.taxLotRepository = taxLotRepository;
         this.allocationRepository = allocationRepository;
         this.taxLotMapper = taxLotMapper;
+        this.assetRepository = assetRepository;
     }
 
     public AssetDetailResponse getAssetDetail(String symbol) {
+        String assetName = assetRepository.findBySymbol(symbol.toUpperCase())
+                .map(a -> a.getName() != null ? a.getName() : symbol)
+                .orElse(symbol);
+
         List<ValuationScenario> scenarios =
                 valuationScenarioRepository
                         .findBySymbolOrderByCreatedAtDesc(symbol);
@@ -87,7 +95,7 @@ public class AssetDetailService {
 
         return new AssetDetailResponse(
                 symbol,
-                symbol,
+                assetName,
                 holding,
                 transactions,
                 scenarios,

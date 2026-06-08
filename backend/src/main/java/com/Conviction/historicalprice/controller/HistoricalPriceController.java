@@ -34,15 +34,16 @@ public class HistoricalPriceController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
+        String sym = symbol.toUpperCase();
         if (from != null && to != null) {
-            return service.getPricesInRange(symbol, from, to);
+            return service.getPricesInRange(sym, from, to);
         }
-        return service.getPrices(symbol);
+        return service.getPrices(sym);
     }
 
     @GetMapping("/{symbol}/latest")
     public HistoricalPriceResponse getLatest(@PathVariable String symbol) {
-        return service.getLatestPrice(symbol);
+        return service.getLatestPrice(symbol.toUpperCase());
     }
 
     @PostMapping("/{symbol}")

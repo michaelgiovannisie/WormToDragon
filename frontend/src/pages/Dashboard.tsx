@@ -179,7 +179,7 @@ export default function Dashboard() {
                 ? ((Number(h.marketValue) - Number(h.totalCostBasis)) / Number(h.totalCostBasis) * 100).toFixed(2)
                 : "0.00";
               return (
-                <tr key={h.id} style={{ borderTop: `1px solid ${C.borderSubtle}`, cursor: "pointer" }}
+                <tr key={h.assetId} style={{ borderTop: `1px solid ${C.borderSubtle}`, cursor: "pointer" }}
                   onClick={() => navigate(`/research?symbol=${h.symbol}`)}>
                   <td style={tableCellStyle}>
                     <span style={{ color: C.gold, fontWeight: 700 }}>{h.symbol}</span>

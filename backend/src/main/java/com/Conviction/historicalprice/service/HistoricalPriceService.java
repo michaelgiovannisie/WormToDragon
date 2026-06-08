@@ -27,6 +27,7 @@ public class HistoricalPriceService {
         this.assetRepository = assetRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<HistoricalPriceResponse> getPrices(String symbol) {
         return priceRepository
                 .findByAssetSymbolOrderByPriceDateAsc(symbol)
@@ -35,6 +36,7 @@ public class HistoricalPriceService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<HistoricalPriceResponse> getPricesInRange(
             String symbol,
             LocalDate from,
@@ -49,6 +51,7 @@ public class HistoricalPriceService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public HistoricalPriceResponse getLatestPrice(String symbol) {
         return priceRepository
                 .findTopByAssetSymbolOrderByPriceDateDesc(symbol)
