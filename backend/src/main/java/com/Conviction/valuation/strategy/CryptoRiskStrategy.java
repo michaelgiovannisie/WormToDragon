@@ -44,7 +44,7 @@ public class CryptoRiskStrategy implements ValuationStrategy {
 
         BigDecimal futureValue = request.earningsPerShare()
                 .multiply(BigDecimal.ONE.add(g).pow(request.years()))
-                .multiply(request.terminalMultiple());
+                .multiply(request.exitMultiple() != null ? request.exitMultiple() : BigDecimal.valueOf(20));
 
         BigDecimal discountFactor = BigDecimal.ONE.add(d).pow(request.years());
 

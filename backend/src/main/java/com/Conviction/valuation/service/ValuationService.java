@@ -52,46 +52,49 @@ public class ValuationService {
     }
 
     public List<ValuationResponse> calculatePresets(ValuationPresetRequest request) {
-        return List.of(
-                calculate(new ValuationRequest(
-                        request.symbol(),
-                        ValuationModelType.DCF,
-                        ValuationCaseType.BEAR,
-                        request.currentPrice(),
-                        request.earningsPerShare(),
-                        BigDecimal.valueOf(4),
-                        BigDecimal.valueOf(11),
-                        10,
-                        BigDecimal.valueOf(16)
-                )),
-                calculate(new ValuationRequest(
-                        request.symbol(),
-                        ValuationModelType.DCF,
-                        ValuationCaseType.BASE,
-                        request.currentPrice(),
-                        request.earningsPerShare(),
-                        BigDecimal.valueOf(8),
-                        BigDecimal.valueOf(10),
-                        10,
-                        BigDecimal.valueOf(22)
-                )),
-                calculate(new ValuationRequest(
-                        request.symbol(),
-                        ValuationModelType.DCF,
-                        ValuationCaseType.BULL,
-                        request.currentPrice(),
-                        request.earningsPerShare(),
-                        BigDecimal.valueOf(12),
-                        BigDecimal.valueOf(9),
-                        10,
-                        BigDecimal.valueOf(28)
-                ))
+        List<ValuationResponse> results = new java.util.ArrayList<>();
+
+        // Preset assumptions — bear/base/bull
+        // growth%, discount%, terminalGrowth%, exitMultiple (cross-check)
+        record Preset(ValuationCaseType caseType, int growth, int discount, double termGrowth, int exitMult) {}
+        List<Preset> presets = List.of(
+                new Preset(ValuationCaseType.BEAR, 4,  11, 1.5, 14),
+                new Preset(ValuationCaseType.BASE, 8,  10, 2.5, 20),
+                new Preset(ValuationCaseType.BULL, 12,  9, 3.5, 26)
         );
+
+        // DCF presets — run when EPS is provided
+        if (request.earningsPerShare() != null) {
+            for (Preset p : presets) {
+                results.add(calculate(new ValuationRequest(
+                        request.symbol(), ValuationModelType.DCF, p.caseType(),
+                        request.currentPrice(), request.earningsPerShare(), null,
+                        BigDecimal.valueOf(p.growth()), BigDecimal.valueOf(p.discount()), 10,
+                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult())
+                )));
+            }
+        }
+
+        // OWNER_EARNINGS presets — run when FCF per share is provided
+        BigDecimal fcf = request.freeCashFlowPerShare();
+        if (fcf != null && fcf.compareTo(BigDecimal.ZERO) != 0) {
+            for (Preset p : presets) {
+                results.add(calculate(new ValuationRequest(
+                        request.symbol(), ValuationModelType.OWNER_EARNINGS, p.caseType(),
+                        request.currentPrice(), null, fcf,
+                        BigDecimal.valueOf(p.growth()), BigDecimal.valueOf(p.discount()), 10,
+                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult())
+                )));
+            }
+        }
+
+        return results;
     }
 
     private ValuationResponse calculate(ValuationRequest request) {
         ValuationStrategy strategy = resolveStrategy(request.modelType());
-        BigDecimal intrinsicValue = strategy.calculateIntrinsicValue(request);
+        BigDecimal intrinsicValue    = strategy.calculateIntrinsicValue(request);
+        BigDecimal exitMultipleValue = strategy.calculateExitMultipleValue(request);
 
         BigDecimal marginOfSafetyPercent = intrinsicValue.compareTo(BigDecimal.ZERO) == 0
                 ? BigDecimal.valueOf(-100)
@@ -116,7 +119,9 @@ public class ValuationService {
                 request.growthRatePercent(),
                 request.discountRatePercent(),
                 request.years(),
-                request.terminalMultiple(),
+                request.terminalGrowthRatePercent(),
+                request.exitMultiple(),
+                exitMultipleValue,
                 intrinsicValue,
                 marginOfSafetyPercent,
                 valuationLabel
@@ -142,10 +147,14 @@ public class ValuationService {
         scenario.setCaseType(request.caseType());
         scenario.setCurrentPrice(request.currentPrice());
         scenario.setEarningsPerShare(request.earningsPerShare());
+        scenario.setFreeCashFlowPerShare(request.freeCashFlowPerShare());
         scenario.setGrowthRatePercent(request.growthRatePercent());
         scenario.setDiscountRatePercent(request.discountRatePercent());
         scenario.setYears(request.years());
-        scenario.setTerminalMultiple(request.terminalMultiple());
+        scenario.setTerminalMultiple(null);                                        // legacy field — null for new scenarios
+        scenario.setTerminalGrowthRatePercent(request.terminalGrowthRatePercent());
+        scenario.setExitMultiple(request.exitMultiple());
+        scenario.setExitMultipleValue(response.exitMultipleValue());
         scenario.setIntrinsicValue(response.intrinsicValue());
         scenario.setMarginOfSafetyPercent(response.marginOfSafetyPercent());
         scenario.setValuationLabel(response.valuationLabel());

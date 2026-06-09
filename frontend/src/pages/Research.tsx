@@ -8,14 +8,15 @@ import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 
-const MODELS = ["DCF", "PEG", "GRAHAM", "CRYPTO_RISK"] as const;
+const MODELS = ["DCF", "OWNER_EARNINGS", "PEG", "GRAHAM", "CRYPTO_RISK"] as const;
 type Model = typeof MODELS[number];
 
 const MODEL_LABELS: Record<Model, string> = {
-  DCF:         "Discounted Cash Flow",
-  PEG:         "PEG Ratio (Peter Lynch)",
-  GRAHAM:      "Graham Number",
-  CRYPTO_RISK: "Crypto Risk-Adjusted",
+  DCF:            "Discounted Cash Flow",
+  OWNER_EARNINGS: "Owner Earnings (FCF)",
+  PEG:            "PEG Ratio (Peter Lynch)",
+  GRAHAM:         "Graham Number",
+  CRYPTO_RISK:    "Crypto Risk-Adjusted",
 };
 
 export default function Research() {
@@ -31,8 +32,9 @@ export default function Research() {
   const [dcaRecs, setDcaRecs]           = useState<any[]>([]);
   const [dcaCash, setDcaCash]           = useState("1000");
   const [formVals, setFormVals]         = useState({
-    currentPrice: "", earningsPerShare: "", growthRatePercent: "",
-    discountRatePercent: "", years: "10", terminalMultiple: "",
+    currentPrice: "", earningsPerShare: "", freeCashFlowPerShare: "",
+    growthRatePercent: "", discountRatePercent: "", years: "10",
+    terminalGrowthRatePercent: "2.5", exitMultiple: "20",
   });
   const [submitting, setSubmitting]     = useState(false);
   const [priceRange, setPriceRange]     = useState("1y");
@@ -141,12 +143,14 @@ export default function Research() {
         : `Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, no financial data for this symbol.`
       );
       // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
-      const eps = data.metrics?.epsTTM;
+      const eps   = data.metrics?.epsTTM;
+      const fcf   = data.metrics?.freeCashFlowPerShareTTM;
       const price = newDetail?.holding?.marketPrice;
       setFormVals(prev => ({
         ...prev,
-        ...(eps != null ? { earningsPerShare: String(eps) } : {}),
-        ...(price != null ? { currentPrice: String(price) } : {}),
+        ...(eps   != null ? { earningsPerShare:      String(eps)   } : {}),
+        ...(fcf   != null ? { freeCashFlowPerShare:  String(fcf)   } : {}),
+        ...(price != null ? { currentPrice:          String(price) } : {}),
       }));
     } catch (e: any) {
       setSyncMsg("Sync failed: " + e.message);
@@ -166,12 +170,14 @@ export default function Research() {
           symbol,
           modelType: model,
           caseType: "BASE",
-          currentPrice: Number(formVals.currentPrice),
-          earningsPerShare: Number(formVals.earningsPerShare),
-          growthRatePercent: Number(formVals.growthRatePercent),
-          discountRatePercent: Number(formVals.discountRatePercent),
-          years: Number(formVals.years),
-          terminalMultiple: Number(formVals.terminalMultiple),
+          currentPrice:              Number(formVals.currentPrice),
+          earningsPerShare:          formVals.earningsPerShare          ? Number(formVals.earningsPerShare)          : null,
+          freeCashFlowPerShare:      formVals.freeCashFlowPerShare      ? Number(formVals.freeCashFlowPerShare)      : null,
+          growthRatePercent:         Number(formVals.growthRatePercent),
+          discountRatePercent:       Number(formVals.discountRatePercent),
+          years:                     Number(formVals.years),
+          terminalGrowthRatePercent: Number(formVals.terminalGrowthRatePercent),
+          exitMultiple:              formVals.exitMultiple               ? Number(formVals.exitMultiple)              : null,
         }),
       });
       // Reload detail to pick up new scenario
@@ -186,7 +192,8 @@ export default function Research() {
   };
 
   const handleRunPresets = async () => {
-    if (!symbol || !formVals.currentPrice || !formVals.earningsPerShare) return;
+    if (!symbol || !formVals.currentPrice) return;
+    if (!formVals.earningsPerShare && !formVals.freeCashFlowPerShare) return;
     setSubmitting(true);
     try {
       await fetch(`${API}/valuations/presets`, {
@@ -194,9 +201,11 @@ export default function Research() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           symbol,
-          currentPrice: Number(formVals.currentPrice),
-          earningsPerShare: Number(formVals.earningsPerShare),
+          currentPrice:         Number(formVals.currentPrice),
+          earningsPerShare:     formVals.earningsPerShare     ? Number(formVals.earningsPerShare)     : null,
+          freeCashFlowPerShare: formVals.freeCashFlowPerShare ? Number(formVals.freeCashFlowPerShare) : null,
         }),
+        // Note: presets use hardcoded terminal growth rates and exit multiples server-side
       });
       const updated = await fetch(`${API}/assets/${symbol}/detail`).then(r => r.json());
       setDetail(updated);
@@ -584,9 +593,24 @@ export default function Research() {
               {[["Bear Case", bearCase], ["Base Case", baseCase], ["Bull Case", bullCase]].map(([label, sc]: any) => (
                 <div key={label} style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
                   <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
-                  <h4 style={{ fontSize: "28px", margin: "12px 0 0", color: sc ? C.text : C.muted }}>
-                    {sc ? `$${Number(sc.intrinsicValue).toFixed(2)}` : "—"}
-                  </h4>
+                  {/* Primary DCF value */}
+                  <div style={{ marginTop: "12px" }}>
+                    <p style={{ color: C.muted, fontSize: "11px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Primary (DCF)</p>
+                    <h4 style={{ fontSize: "28px", margin: "4px 0 0", color: sc ? C.text : C.muted }}>
+                      {sc ? `$${Number(sc.intrinsicValue).toFixed(2)}` : "—"}
+                    </h4>
+                  </div>
+                  {/* Cross-check exit multiple value */}
+                  {sc?.exitMultipleValue != null && (
+                    <div style={{ marginTop: "8px" }}>
+                      <p style={{ color: C.muted, fontSize: "11px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Cross-check ({sc.exitMultiple}x exit)
+                      </p>
+                      <p style={{ fontSize: "18px", margin: "4px 0 0", color: C.muted }}>
+                        ${Number(sc.exitMultipleValue).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
                   <p style={{ color: sc && Number(sc.marginOfSafetyPercent) >= 20 ? C.green : sc && Number(sc.marginOfSafetyPercent) >= 0 ? C.gold : C.red, marginTop: "10px", fontSize: "14px" }}>
                     {sc ? `MOS ${Number(sc.marginOfSafetyPercent).toFixed(1)}%` : ""}
                   </p>
@@ -594,11 +618,48 @@ export default function Research() {
                     {sc ? `Buy below $${(Number(sc.intrinsicValue) * (1 - targetMos / 100)).toFixed(2)}` : ""}
                   </p>
                   <p style={{ color: C.muted, marginTop: "8px", fontSize: "12px" }}>
-                    {sc ? `Growth ${sc.growthRatePercent}% · Discount ${sc.discountRatePercent}% · ${sc.terminalMultiple}x` : ""}
+                    {sc ? `g=${sc.growthRatePercent}% · d=${sc.discountRatePercent}% · gT=${sc.terminalGrowthRatePercent ?? "—"}%` : ""}
                   </p>
                 </div>
               ))}
             </div>
+
+            {/* Fair Value Range bar */}
+            {bearCase && bullCase && (() => {
+              const lo  = Number(bearCase.intrinsicValue);
+              const hi  = Number(bullCase.intrinsicValue);
+              const cur = Number(detail?.holding?.marketPrice ?? bearCase.currentPrice ?? 0);
+              if (!lo || !hi || lo >= hi) return null;
+
+              const clampPct = (v: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+              const markerPct = clampPct(cur);
+              const markerColor = cur < lo ? C.green : cur > hi ? C.red : C.gold;
+              const rangeLabel  = cur < lo ? "Trading below fair value range" : cur > hi ? "Trading above fair value range" : "Trading within fair value range";
+
+              return (
+                <div style={{ marginTop: "28px", padding: "20px 24px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <p style={{ color: C.muted, fontSize: "12px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Fair Value Range</p>
+                    <p style={{ color: markerColor, fontSize: "12px", margin: 0 }}>{rangeLabel}</p>
+                  </div>
+                  <div style={{ position: "relative", height: "8px", borderRadius: "4px", background: "rgba(200,169,106,0.15)" }}>
+                    <div style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: "4px",
+                      background: `linear-gradient(to right, ${C.green}, ${C.gold}, ${C.red})`, opacity: 0.35 }} />
+                    {/* Current price marker */}
+                    <div style={{ position: "absolute", top: "50%", left: `${markerPct}%`,
+                      transform: "translate(-50%, -50%)", width: "14px", height: "14px",
+                      borderRadius: "50%", background: markerColor, border: `2px solid ${C.bg}` }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
+                    <span style={{ color: C.muted, fontSize: "12px" }}>${lo.toFixed(0)} bear</span>
+                    <span style={{ color: markerColor, fontSize: "13px", fontWeight: 600 }}>
+                      ${cur.toFixed(2)} current
+                    </span>
+                    <span style={{ color: C.muted, fontSize: "12px" }}>bull ${hi.toFixed(0)}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Run Valuation */}
             <div style={{ marginTop: "28px", borderTop: `1px solid ${C.borderSubtle}`, paddingTop: "24px" }}>
@@ -623,24 +684,42 @@ export default function Research() {
                     ))}
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
-                    {[
-                      { key: "currentPrice",       label: "Current Price ($)" },
-                      { key: "earningsPerShare",    label: "EPS ($)" },
-                      { key: "growthRatePercent",   label: "Growth Rate (%)" },
-                      { key: "discountRatePercent", label: model === "GRAHAM" ? "Bond Yield / Discount (%)" : "Discount Rate (%)" },
-                      { key: "years",               label: "Years" },
-                      { key: "terminalMultiple",    label: "Terminal Multiple" },
-                    ].map(({ key, label }) => (
-                      <div key={key}>
-                        <p style={{ color: C.muted, fontSize: "12px", marginBottom: "6px" }}>{label}</p>
-                        <input type="number"
-                          value={formVals[key as keyof typeof formVals]}
-                          onChange={e => setFormVals(v => ({ ...v, [key]: e.target.value }))}
-                          style={inputStyle} />
+                  {(() => {
+                    const isDcfModel = model === "DCF" || model === "OWNER_EARNINGS";
+                    const growthLabel = model === "DCF" ? "EPS Growth Rate (%)"
+                                      : model === "OWNER_EARNINGS" ? "FCF Growth Rate (%)"
+                                      : "Growth Rate (%)";
+                    const fields = [
+                      { key: "currentPrice",              label: "Current Price ($)",                                          show: true },
+                      { key: "earningsPerShare",           label: "EPS ($)",                                                    show: model !== "OWNER_EARNINGS" },
+                      { key: "freeCashFlowPerShare",       label: "FCF per Share ($)",                                          show: model === "OWNER_EARNINGS" },
+                      { key: "growthRatePercent",          label: growthLabel,                                                  show: true },
+                      { key: "discountRatePercent",        label: model === "GRAHAM" ? "Bond Yield / Discount (%)" : "Discount Rate (%)", show: model !== "PEG" },
+                      { key: "years",                      label: "Years",                                                      show: isDcfModel },
+                      { key: "terminalGrowthRatePercent",  label: "Terminal Growth Rate (%) — perpetuity",                     show: isDcfModel },
+                      { key: "exitMultiple",               label: "Exit Multiple — cross-check (optional)",                    show: isDcfModel },
+                    ];
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
+                        {fields.filter(f => f.show).map(({ key, label }) => (
+                          <div key={key}>
+                            <p style={{ color: C.muted, fontSize: "12px", marginBottom: "6px" }}>{label}</p>
+                            <input type="number"
+                              value={formVals[key as keyof typeof formVals]}
+                              onChange={e => setFormVals(v => ({ ...v, [key]: e.target.value }))}
+                              style={inputStyle} />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
+                  {(model === "DCF" || model === "OWNER_EARNINGS") && (
+                    <p style={{ color: C.muted, fontSize: "11px", marginTop: "8px" }}>
+                      {model === "OWNER_EARNINGS"
+                        ? "Uses FCF/share as base — strips non-cash distortions. Terminal growth rate = long-run perpetuity growth (anchor to GDP: 2–4%)."
+                        : "Terminal growth rate = long-run perpetuity growth assumed forever after year N (anchor to GDP: 2–4%). Exit multiple is an optional cross-check."}
+                    </p>
+                  )}
 
                   <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
                     <button onClick={handleRunValuation} disabled={submitting}
@@ -767,7 +846,7 @@ export default function Research() {
                         {Number(s.marginOfSafetyPercent).toFixed(2)}%
                       </td>
                       <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
-                        g={s.growthRatePercent}% d={s.discountRatePercent}% {s.terminalMultiple}x
+                        g={s.growthRatePercent}% d={s.discountRatePercent}%{s.terminalGrowthRatePercent != null ? ` gT=${s.terminalGrowthRatePercent}%` : s.terminalMultiple != null ? ` ${s.terminalMultiple}x` : ""}
                       </td>
                       <td style={{ ...tableCellStyle, fontSize: "12px",
                         color: s.valuationLabel === "UNDERVALUED" ? C.green : s.valuationLabel === "OVERVALUED" ? C.red : C.gold }}>

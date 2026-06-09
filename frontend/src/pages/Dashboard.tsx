@@ -7,6 +7,7 @@ import {
 import { API, PORTFOLIO_ID, ACCOUNT_ID } from "../constants";
 import { C, PIE_COLORS, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
+import { HoldingsSyncWidget } from "../components/HoldingsSyncWidget";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -14,8 +15,6 @@ export default function Dashboard() {
   const [holdings, setHoldings]         = useState<any[]>([]);
   const [snapshots, setSnapshots]       = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [syncing, setSyncing]           = useState(false);
-  const [syncMsg, setSyncMsg]           = useState<string | null>(null);
   const [chartRange, setChartRange]     = useState("1y");
 
   const RANGES = ["1w","1m","3m","ytd","1y","all"];
@@ -38,22 +37,6 @@ export default function Dashboard() {
   const handleRangeChange = (range: string) => {
     setChartRange(range);
     loadData(range);
-  };
-
-  const syncAllPrices = async () => {
-    setSyncing(true);
-    setSyncMsg(null);
-    try {
-      const res = await fetch(`${API}/fmp/sync-all-holdings`, { method: "POST" });
-      const data = await res.json();
-      const synced = Array.isArray(data) ? data.filter((r: any) => r.historicalPricesSynced > 0).length : 0;
-      setSyncMsg(`Synced ${synced}/${Array.isArray(data) ? data.length : 0} symbols`);
-      loadData();
-    } catch {
-      setSyncMsg("Sync failed");
-    } finally {
-      setSyncing(false);
-    }
   };
 
   const trendData = snapshots.length > 0
@@ -90,14 +73,7 @@ export default function Dashboard() {
         A refined view of capital, conviction, and performance.
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
-        <button
-          onClick={syncAllPrices}
-          disabled={syncing}
-          style={{ background: C.gold, color: "#000", border: "none", borderRadius: "10px", padding: "10px 20px", fontWeight: 700, cursor: syncing ? "not-allowed" : "pointer", opacity: syncing ? 0.6 : 1 }}
-        >
-          {syncing ? "Syncing..." : "⟳ Sync Holdings"}
-        </button>
-        {syncMsg && <span style={{ color: C.muted, fontSize: "13px" }}>{syncMsg}</span>}
+        <HoldingsSyncWidget />
         <div style={{ marginLeft: "auto" }}>
           <Nasdaq100SyncWidget />
         </div>

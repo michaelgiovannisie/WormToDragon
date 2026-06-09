@@ -4,6 +4,7 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { API, PORTFOLIO_ID } from "../constants";
 import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
+import { HoldingsSyncWidget } from "../components/HoldingsSyncWidget";
 
 type SortKey = "symbol" | "marketValue" | "unrealizedGain" | "quantityHeld" | "averageCostBasis" | "dayChangePct";
 
@@ -163,7 +164,10 @@ export default function Holdings() {
       <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>Holdings</h2>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "40px", flexWrap: "wrap", gap: "12px" }}>
         <p style={{ color: C.muted, margin: 0 }}>All current positions across your account.</p>
-        <Nasdaq100SyncWidget />
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <HoldingsSyncWidget />
+          <Nasdaq100SyncWidget />
+        </div>
       </div>
 
       {/* Summary cards */}

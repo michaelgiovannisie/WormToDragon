@@ -11,9 +11,11 @@ public record ValuationRequest(
         ValuationCaseType caseType,
         BigDecimal currentPrice,
         BigDecimal earningsPerShare,
+        BigDecimal freeCashFlowPerShare,      // only used by OWNER_EARNINGS; null for all other models
         BigDecimal growthRatePercent,
         BigDecimal discountRatePercent,
         int years,
-        BigDecimal terminalMultiple
+        BigDecimal terminalGrowthRatePercent, // perpetuity terminal growth rate (e.g. 2.5 for 2.5%)
+        BigDecimal exitMultiple               // nullable — optional P/E exit-multiple cross-check
 ) {
 }

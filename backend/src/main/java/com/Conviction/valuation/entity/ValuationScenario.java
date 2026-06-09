@@ -58,6 +58,9 @@ public class ValuationScenario {
     @Column(precision = 19, scale = 4)
     private BigDecimal earningsPerShare;
 
+    @Column(precision = 19, scale = 4, nullable = true)
+    private BigDecimal freeCashFlowPerShare;
+
     @Column(precision = 19, scale = 4)
     private BigDecimal growthRatePercent;
 
@@ -66,8 +69,17 @@ public class ValuationScenario {
 
     private int years;
 
-    @Column(precision = 19, scale = 4)
-    private BigDecimal terminalMultiple;
+    @Column(precision = 19, scale = 4, nullable = true)
+    private BigDecimal terminalMultiple;          // legacy — kept for backward compat with old scenarios
+
+    @Column(precision = 19, scale = 4, nullable = true)
+    private BigDecimal terminalGrowthRatePercent; // perpetuity terminal growth rate for new scenarios
+
+    @Column(precision = 19, scale = 4, nullable = true)
+    private BigDecimal exitMultiple;              // optional cross-check multiple
+
+    @Column(precision = 19, scale = 4, nullable = true)
+    private BigDecimal exitMultipleValue;         // cross-check intrinsic value
 
     @Column(precision = 19, scale = 4)
     private BigDecimal intrinsicValue;

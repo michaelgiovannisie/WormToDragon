@@ -14,7 +14,9 @@ public record ValuationResponse(
         BigDecimal growthRatePercent,
         BigDecimal discountRatePercent,
         int years,
-        BigDecimal terminalMultiple,
+        BigDecimal terminalGrowthRatePercent,  // perpetuity terminal growth rate
+        BigDecimal exitMultiple,               // nullable — echoed back if provided
+        BigDecimal exitMultipleValue,          // nullable — cross-check intrinsic value via exit multiple
 
         BigDecimal intrinsicValue,
         BigDecimal marginOfSafetyPercent,

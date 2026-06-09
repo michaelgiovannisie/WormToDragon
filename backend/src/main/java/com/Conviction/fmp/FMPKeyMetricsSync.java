@@ -27,10 +27,12 @@ public class FMPKeyMetricsSync {
 
         BigDecimal peRatioTTM = null;
         BigDecimal revenueGrowth = null;
+        BigDecimal fcfPerShareTTM = null;
         if (result != null && !result.isEmpty()) {
             Map<String, Object> m = result.get(0);
-            peRatioTTM = toBD(m.get("peRatioTTM"));
+            peRatioTTM    = toBD(m.get("peRatioTTM"));
             revenueGrowth = toBD(m.get("revenueGrowthTTM"));
+            fcfPerShareTTM = toBD(m.get("freeCashFlowPerShareTTM"));
         }
 
         // EPS comes from the income statement TTM endpoint
@@ -49,7 +51,7 @@ public class FMPKeyMetricsSync {
             assetRepository.save(eq);
         }
 
-        return new FMPKeyMetricsResponse(symbol, epsTTM, peRatioTTM, revenueGrowth);
+        return new FMPKeyMetricsResponse(symbol, epsTTM, peRatioTTM, revenueGrowth, fcfPerShareTTM);
     }
 
     private BigDecimal toBD(Object val) {
@@ -62,6 +64,7 @@ public class FMPKeyMetricsSync {
             String symbol,
             BigDecimal epsTTM,
             BigDecimal peRatioTTM,
-            BigDecimal revenueGrowthTTM
+            BigDecimal revenueGrowthTTM,
+            BigDecimal freeCashFlowPerShareTTM
     ) {}
 }

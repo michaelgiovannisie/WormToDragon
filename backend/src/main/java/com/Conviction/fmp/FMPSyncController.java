@@ -31,6 +31,7 @@ public class FMPSyncController {
     private final HoldingService holdingService;
     private final HoldingRepository holdingRepository;
     private final Nasdaq100SyncService nasdaq100SyncService;
+    private final HoldingsSyncService holdingsSyncService;
 
     public FMPSyncController(
             FMPHistoricalPriceSync historicalSync,
@@ -39,7 +40,8 @@ public class FMPSyncController {
             YahooHistoricalPriceSync yahooSync,
             HoldingService holdingService,
             HoldingRepository holdingRepository,
-            Nasdaq100SyncService nasdaq100SyncService
+            Nasdaq100SyncService nasdaq100SyncService,
+            HoldingsSyncService holdingsSyncService
     ) {
         this.historicalSync       = historicalSync;
         this.profileSync          = profileSync;
@@ -48,6 +50,7 @@ public class FMPSyncController {
         this.holdingService       = holdingService;
         this.holdingRepository    = holdingRepository;
         this.nasdaq100SyncService = nasdaq100SyncService;
+        this.holdingsSyncService  = holdingsSyncService;
     }
 
     /** Fetch and store EOD OHLCV history. Optional from/to to limit range. */
@@ -145,5 +148,24 @@ public class FMPSyncController {
     @GetMapping("/sync-nasdaq100/status")
     public Nasdaq100SyncService.JobStatus getNasdaq100SyncStatus() {
         return nasdaq100SyncService.getStatus();
+    }
+
+    // ── Holdings background sync ──────────────────────────────────────────────
+
+    /** Start background sync of all active held symbols (3-month price top-up + financials). */
+    @PostMapping("/sync-holdings-bg")
+    public ResponseEntity<HoldingsSyncService.JobStatus> startHoldingsSync() {
+        boolean started = holdingsSyncService.requestStart();
+        if (!started) {
+            return ResponseEntity.status(409).body(holdingsSyncService.getStatus());
+        }
+        holdingsSyncService.runSync();
+        return ResponseEntity.accepted().body(holdingsSyncService.getStatus());
+    }
+
+    /** Poll for holdings sync progress. */
+    @GetMapping("/sync-holdings-bg/status")
+    public HoldingsSyncService.JobStatus getHoldingsSyncStatus() {
+        return holdingsSyncService.getStatus();
     }
 }
