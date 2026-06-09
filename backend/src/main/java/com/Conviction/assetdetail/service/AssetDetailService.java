@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.conviction.asset.entity.Equity;
 import com.conviction.asset.repository.AssetRepository;
 import com.conviction.assetdetail.dto.AssetDetailResponse;
 import com.conviction.holding.dto.HoldingResponse;
@@ -56,9 +57,15 @@ public class AssetDetailService {
     }
 
     public AssetDetailResponse getAssetDetail(String symbol) {
-        String assetName = assetRepository.findBySymbol(symbol.toUpperCase())
-                .map(a -> a.getName() != null ? a.getName() : symbol)
-                .orElse(symbol);
+        var asset = assetRepository.findBySymbol(symbol.toUpperCase());
+        String assetName = asset.map(a -> a.getName() != null ? a.getName() : symbol).orElse(symbol);
+
+        java.math.BigDecimal eps = null, fcfPerShare = null, revenueGrowthTTM = null;
+        if (asset.isPresent() && asset.get() instanceof Equity eq) {
+            eps              = eq.getEps();
+            fcfPerShare      = eq.getFreeCashFlowPerShare();
+            revenueGrowthTTM = eq.getRevenueGrowthTTM();
+        }
 
         List<ValuationScenario> scenarios =
                 valuationScenarioRepository
@@ -100,7 +107,10 @@ public class AssetDetailService {
                 transactions,
                 scenarios,
                 taxLots,
-                taxLotAllocations
+                taxLotAllocations,
+                eps,
+                fcfPerShare,
+                revenueGrowthTTM
         );
     }
 

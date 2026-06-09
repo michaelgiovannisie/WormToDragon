@@ -72,9 +72,24 @@ export default function Research() {
     fetch(`${API}/assets/${symbol}/detail`)
       .then(r => r.json()).then(d => {
         setDetail(d);
-        if (d?.holding?.marketPrice != null) {
-          setFormVals(prev => ({ ...prev, currentPrice: String(d.holding.marketPrice) }));
-        }
+        const price      = d?.holding?.marketPrice;
+        const eps        = d?.eps;
+        const fcf        = d?.freeCashFlowPerShare;
+        const rawGrowth  = d?.revenueGrowthTTM; // stored as decimal e.g. 0.08
+        const growth     = rawGrowth != null
+          ? String(Math.round(rawGrowth * 100 * 10) / 10)  // e.g. 0.083 → "8.3"
+          : "";
+        setFormVals(prev => ({
+          ...prev,
+          ...(price  != null ? { currentPrice:         String(price) } : {}),
+          ...(eps    != null ? { earningsPerShare:      String(eps)   } : {}),
+          ...(fcf    != null ? { freeCashFlowPerShare:  String(fcf)   } : {}),
+          ...(growth          ? { growthRatePercent:    growth        } : {}),
+          discountRatePercent:       prev.discountRatePercent || "10",
+          years:                     prev.years               || "10",
+          terminalGrowthRatePercent: prev.terminalGrowthRatePercent || "2.5",
+          exitMultiple:              prev.exitMultiple         || "20",
+        }));
       }).catch(console.error);
 
     fetch(`${API}/historical-prices/${symbol}`)
@@ -727,11 +742,54 @@ export default function Research() {
                         padding: "12px 24px", cursor: "pointer", fontFamily: C.font, fontSize: "14px", fontWeight: 700 }}>
                       {submitting ? "Running…" : "Run Single Scenario"}
                     </button>
-                    <button onClick={handleRunPresets} disabled={submitting}
-                      style={{ background: "transparent", color: C.gold, border: `1px solid ${C.gold}`,
-                        borderRadius: "10px", padding: "12px 24px", cursor: "pointer", fontFamily: C.font, fontSize: "14px" }}>
-                      Run Bear / Base / Bull Presets
-                    </button>
+                    <div style={{ position: "relative", display: "inline-block" }}
+                      onMouseEnter={e => (e.currentTarget.querySelector(".preset-tooltip") as HTMLElement)!.style.display = "block"}
+                      onMouseLeave={e => (e.currentTarget.querySelector(".preset-tooltip") as HTMLElement)!.style.display = "none"}>
+                      <button onClick={handleRunPresets} disabled={submitting}
+                        style={{ background: "transparent", color: C.gold, border: `1px solid ${C.gold}`,
+                          borderRadius: "10px", padding: "12px 24px", cursor: "pointer", fontFamily: C.font, fontSize: "14px" }}>
+                        Run Bear / Base / Bull Presets
+                      </button>
+                      <div className="preset-tooltip" style={{
+                        display: "none", position: "absolute", bottom: "calc(100% + 8px)", left: "50%",
+                        transform: "translateX(-50%)", background: C.card, border: `1px solid ${C.border}`,
+                        borderRadius: "10px", padding: "14px 16px", zIndex: 100, whiteSpace: "nowrap",
+                        fontFamily: C.font, fontSize: "12px", color: C.text, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
+                      }}>
+                        <div style={{ marginBottom: "8px", color: C.muted, fontWeight: 600, letterSpacing: "0.05em", fontSize: "11px" }}>
+                          PRESET ASSUMPTIONS (EPS-based, 10 yrs)
+                        </div>
+                        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                          <thead>
+                            <tr style={{ color: C.muted, fontSize: "11px" }}>
+                              <th style={{ textAlign: "left",  paddingRight: "16px" }}></th>
+                              <th style={{ textAlign: "right", paddingRight: "12px" }}>Growth</th>
+                              <th style={{ textAlign: "right", paddingRight: "12px" }}>Discount</th>
+                              <th style={{ textAlign: "right", paddingRight: "12px" }}>Term. Growth</th>
+                              <th style={{ textAlign: "right" }}>Exit ×</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { label: "Bear", color: "#ef4444", g: "4%", d: "11%", gT: "1.5%", ex: "14×" },
+                              { label: "Base", color: C.gold,    g: "8%", d: "10%", gT: "2.5%", ex: "20×" },
+                              { label: "Bull", color: "#22c55e", g: "12%", d: "9%",  gT: "3.5%", ex: "26×" },
+                            ].map(row => (
+                              <tr key={row.label}>
+                                <td style={{ paddingRight: "16px", paddingTop: "4px", fontWeight: 700, color: row.color }}>{row.label}</td>
+                                <td style={{ textAlign: "right", paddingRight: "12px", paddingTop: "4px" }}>{row.g}</td>
+                                <td style={{ textAlign: "right", paddingRight: "12px", paddingTop: "4px" }}>{row.d}</td>
+                                <td style={{ textAlign: "right", paddingRight: "12px", paddingTop: "4px" }}>{row.gT}</td>
+                                <td style={{ textAlign: "right", paddingTop: "4px" }}>{row.ex}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ marginTop: "8px", color: C.muted, fontSize: "11px" }}>
+                          Price & EPS/FCF taken from your inputs above.
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

@@ -46,8 +46,10 @@ public class FMPKeyMetricsSync {
 
         Asset asset = assetRepository.findBySymbol(symbol.toUpperCase()).orElse(null);
         if (asset instanceof Equity eq) {
-            if (epsTTM != null) eq.setEps(epsTTM);
-            if (peRatioTTM != null) eq.setPeRatio(peRatioTTM);
+            if (epsTTM         != null) eq.setEps(epsTTM);
+            if (peRatioTTM     != null) eq.setPeRatio(peRatioTTM);
+            if (fcfPerShareTTM != null) eq.setFreeCashFlowPerShare(fcfPerShareTTM);
+            if (revenueGrowth  != null) eq.setRevenueGrowthTTM(revenueGrowth);
             assetRepository.save(eq);
         }
 

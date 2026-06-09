@@ -66,12 +66,14 @@ public class ValuationService {
         // DCF presets — run when EPS is provided
         if (request.earningsPerShare() != null) {
             for (Preset p : presets) {
-                results.add(calculate(new ValuationRequest(
+                ValuationRequest req = new ValuationRequest(
                         request.symbol(), ValuationModelType.DCF, p.caseType(),
                         request.currentPrice(), request.earningsPerShare(), null,
                         BigDecimal.valueOf(p.growth()), BigDecimal.valueOf(p.discount()), 10,
-                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult())
-                )));
+                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult()));
+                ValuationResponse resp = calculate(req);
+                persistScenario(req, resp);
+                results.add(resp);
             }
         }
 
@@ -79,12 +81,14 @@ public class ValuationService {
         BigDecimal fcf = request.freeCashFlowPerShare();
         if (fcf != null && fcf.compareTo(BigDecimal.ZERO) != 0) {
             for (Preset p : presets) {
-                results.add(calculate(new ValuationRequest(
+                ValuationRequest req = new ValuationRequest(
                         request.symbol(), ValuationModelType.OWNER_EARNINGS, p.caseType(),
                         request.currentPrice(), null, fcf,
                         BigDecimal.valueOf(p.growth()), BigDecimal.valueOf(p.discount()), 10,
-                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult())
-                )));
+                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult()));
+                ValuationResponse resp = calculate(req);
+                persistScenario(req, resp);
+                results.add(resp);
             }
         }
 

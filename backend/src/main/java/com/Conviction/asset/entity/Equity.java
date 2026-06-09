@@ -28,4 +28,11 @@ public class Equity extends Asset {
 
     @Column(precision = 19, scale = 4)
     private BigDecimal eps;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal freeCashFlowPerShare;
+
+    /** Stored as decimal, e.g. 0.08 = 8% */
+    @Column(precision = 19, scale = 8)
+    private BigDecimal revenueGrowthTTM;
 }

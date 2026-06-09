@@ -1,5 +1,6 @@
 package com.conviction.assetdetail.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import com.conviction.holding.dto.HoldingResponse;
@@ -15,6 +16,9 @@ public record AssetDetailResponse(
         List<TransactionResponse> transactions,
         List<ValuationScenario> valuationScenarios,
         List<TaxLotResponse> taxLots,
-        List<TaxLotAllocationResponse> taxLotAllocations
+        List<TaxLotAllocationResponse> taxLotAllocations,
+        BigDecimal eps,
+        BigDecimal freeCashFlowPerShare,
+        BigDecimal revenueGrowthTTM
 ) {
 }
