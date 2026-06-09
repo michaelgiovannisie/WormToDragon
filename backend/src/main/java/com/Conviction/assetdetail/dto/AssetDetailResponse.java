@@ -19,6 +19,6 @@ public record AssetDetailResponse(
         List<TaxLotAllocationResponse> taxLotAllocations,
         BigDecimal eps,
         BigDecimal freeCashFlowPerShare,
-        BigDecimal revenueGrowthTTM
+        BigDecimal epsGrowth
 ) {
 }

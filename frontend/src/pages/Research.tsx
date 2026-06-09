@@ -75,7 +75,7 @@ export default function Research() {
         const price      = d?.holding?.marketPrice;
         const eps        = d?.eps;
         const fcf        = d?.freeCashFlowPerShare;
-        const rawGrowth  = d?.revenueGrowthTTM; // stored as decimal e.g. 0.08
+        const rawGrowth  = d?.epsGrowth; // stored as decimal e.g. 0.08
         const growth     = rawGrowth != null
           ? String(Math.round(rawGrowth * 100 * 10) / 10)  // e.g. 0.083 → "8.3"
           : "";
@@ -157,15 +157,18 @@ export default function Research() {
         ? `Synced: ${data.historicalPricesSynced} price bars, profile + metrics + financials updated.`
         : `Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, no financial data for this symbol.`
       );
-      // Pre-fill valuation form with fresh metrics from sync response + reloaded holding
-      const eps   = data.metrics?.epsTTM;
-      const fcf   = data.metrics?.freeCashFlowPerShareTTM;
-      const price = newDetail?.holding?.marketPrice;
+      // Pre-fill valuation form — prefer reloaded detail, fall back to sync response
+      const eps       = newDetail?.eps       ?? data.metrics?.epsTTM;
+      const fcf       = newDetail?.freeCashFlowPerShare ?? data.metrics?.freeCashFlowPerShareTTM;
+      const price     = newDetail?.holding?.marketPrice;
+      const rawGrowth = newDetail?.epsGrowth;
+      const growth    = rawGrowth != null ? String(Math.round(rawGrowth * 100 * 10) / 10) : null;
       setFormVals(prev => ({
         ...prev,
-        ...(eps   != null ? { earningsPerShare:      String(eps)   } : {}),
-        ...(fcf   != null ? { freeCashFlowPerShare:  String(fcf)   } : {}),
-        ...(price != null ? { currentPrice:          String(price) } : {}),
+        ...(eps    != null ? { earningsPerShare:     String(eps)   } : {}),
+        ...(fcf    != null ? { freeCashFlowPerShare: String(fcf)   } : {}),
+        ...(price  != null ? { currentPrice:         String(price) } : {}),
+        ...(growth != null ? { growthRatePercent:    growth        } : {}),
       }));
     } catch (e: any) {
       setSyncMsg("Sync failed: " + e.message);
@@ -699,6 +702,29 @@ export default function Research() {
                     ))}
                   </div>
 
+                  {(model === "DCF" || model === "OWNER_EARNINGS") && (
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
+                      <span style={{ color: C.muted, fontSize: "12px", marginRight: "4px" }}>Quick fill:</span>
+                      {[
+                        { label: "Conservative", g: "4",  d: "11", gT: "1.5", ex: "14" },
+                        { label: "Moderate",     g: "8",  d: "10", gT: "2.5", ex: "20" },
+                        { label: "Aggressive",   g: "12", d: "9",  gT: "3.5", ex: "26" },
+                      ].map(p => (
+                        <button key={p.label} onClick={() => setFormVals(v => ({
+                          ...v,
+                          growthRatePercent:         p.g,
+                          discountRatePercent:       p.d,
+                          terminalGrowthRatePercent: p.gT,
+                          exitMultiple:              p.ex,
+                        }))}
+                          style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`,
+                            borderRadius: "6px", padding: "4px 10px", cursor: "pointer",
+                            fontFamily: C.font, fontSize: "12px" }}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {(() => {
                     const isDcfModel = model === "DCF" || model === "OWNER_EARNINGS";
                     const growthLabel = model === "DCF" ? "EPS Growth Rate (%)"

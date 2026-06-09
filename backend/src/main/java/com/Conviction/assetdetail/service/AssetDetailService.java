@@ -60,11 +60,11 @@ public class AssetDetailService {
         var asset = assetRepository.findBySymbol(symbol.toUpperCase());
         String assetName = asset.map(a -> a.getName() != null ? a.getName() : symbol).orElse(symbol);
 
-        java.math.BigDecimal eps = null, fcfPerShare = null, revenueGrowthTTM = null;
+        java.math.BigDecimal eps = null, fcfPerShare = null, epsGrowth = null;
         if (asset.isPresent() && asset.get() instanceof Equity eq) {
-            eps              = eq.getEps();
-            fcfPerShare      = eq.getFreeCashFlowPerShare();
-            revenueGrowthTTM = eq.getRevenueGrowthTTM();
+            eps        = eq.getEps();
+            fcfPerShare = eq.getFreeCashFlowPerShare();
+            epsGrowth  = eq.getEpsGrowth();
         }
 
         List<ValuationScenario> scenarios =
@@ -110,7 +110,7 @@ public class AssetDetailService {
                 taxLotAllocations,
                 eps,
                 fcfPerShare,
-                revenueGrowthTTM
+                epsGrowth
         );
     }
 
