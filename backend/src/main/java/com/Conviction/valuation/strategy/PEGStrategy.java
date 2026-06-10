@@ -10,11 +10,16 @@ import com.conviction.valuation.enums.ValuationModelType;
 
 /**
  * Peter Lynch PEG Ratio:
- *   A stock is fairly valued when PEG = 1, meaning P/E = growth rate.
- *   Fair P/E = growthRatePercent  (e.g. 15% growth → fair P/E of 15)
- *   Intrinsic value = EPS × growthRatePercent
+ *   PEG = P/E ÷ EPS growth rate %
+ *       = (currentPrice / EPS) / growthRatePercent
  *
- * Uses: earningsPerShare, growthRatePercent
+ *   Interpretation:
+ *     PEG < 1  → potentially undervalued relative to growth
+ *     PEG = 1  → fairly valued (Lynch's sweet spot)
+ *     PEG > 2  → potentially overvalued relative to growth
+ *
+ * Uses: currentPrice, earningsPerShare, growthRatePercent
+ * Returns: PEG ratio (not a price — stored in intrinsicValue field)
  */
 @Component
 public class PEGStrategy implements ValuationStrategy {
@@ -26,8 +31,14 @@ public class PEGStrategy implements ValuationStrategy {
 
     @Override
     public BigDecimal calculateIntrinsicValue(ValuationRequest request) {
-        return request.earningsPerShare()
-                .multiply(request.growthRatePercent())
-                .setScale(2, RoundingMode.HALF_UP);
+        if (request.earningsPerShare() == null || request.earningsPerShare().compareTo(BigDecimal.ZERO) == 0)
+            throw new IllegalArgumentException("EPS is required and must be non-zero for PEG ratio");
+        if (request.growthRatePercent() == null || request.growthRatePercent().compareTo(BigDecimal.ZERO) == 0)
+            throw new IllegalArgumentException("Growth rate is required and must be non-zero for PEG ratio");
+        // P/E = currentPrice / EPS
+        BigDecimal pe = request.currentPrice()
+                .divide(request.earningsPerShare(), 8, RoundingMode.HALF_UP);
+        // PEG = P/E / growthRatePercent (e.g. growth of 15 → divide by 15)
+        return pe.divide(request.growthRatePercent(), 4, RoundingMode.HALF_UP);
     }
 }

@@ -91,15 +91,21 @@ public class TransactionService {
         BigDecimal fees =
                 request.fees() == null ? BigDecimal.ZERO : request.fees();
 
+        // Normalise to NUMERIC(19,4) precision before the duplicate check and
+        // before persisting, so that 1.973266 (CSV) == 1.9733 (DB).
+        BigDecimal quantity4 = request.quantity()    .setScale(4, java.math.RoundingMode.HALF_UP);
+        BigDecimal price4    = request.pricePerUnit().setScale(4, java.math.RoundingMode.HALF_UP);
+        BigDecimal fees4     = fees                  .setScale(4, java.math.RoundingMode.HALF_UP);
+
         if (asset != null &&
                 transactionRepository
                         .existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndFeesAndTransactionDate(
                                 account.getId(),
                                 asset.getId(),
                                 request.transactionType(),
-                                request.quantity(),
-                                request.pricePerUnit(),
-                                fees,
+                                quantity4,
+                                price4,
+                                fees4,
                                 request.transactionDate()
                         )) {
             throw new IllegalArgumentException(
@@ -111,9 +117,9 @@ public class TransactionService {
         transaction.setAccount(account);
         transaction.setAsset(asset);
         transaction.setTransactionType(request.transactionType());
-        transaction.setQuantity(request.quantity());
-        transaction.setPricePerUnit(request.pricePerUnit());
-        transaction.setFees(fees);
+        transaction.setQuantity(quantity4);
+        transaction.setPricePerUnit(price4);
+        transaction.setFees(fees4);
         transaction.setTransactionDate(request.transactionDate());
         transaction.setNotes(request.notes());
 

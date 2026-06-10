@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -65,6 +66,18 @@ public class HoldingController {
             @PathVariable UUID portfolioId
     ) {
         return holdingService.getCashFlowTimeline(portfolioId);
+    }
+
+    /**
+     * Rebuilds the holding for a symbol by resetting it to zero and replaying
+     * all stored transactions in date order. Use this to fix holdings that were
+     * corrupted by duplicate imports.
+     *
+     * POST /api/holdings/rebuild/MCD
+     */
+    @PostMapping("/rebuild/{symbol}")
+    public String rebuildHolding(@PathVariable String symbol) {
+        return holdingService.rebuildHoldingForSymbol(symbol.toUpperCase());
     }
 
 }

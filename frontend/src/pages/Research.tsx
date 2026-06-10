@@ -8,7 +8,7 @@ import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 
-const MODELS = ["DCF", "OWNER_EARNINGS", "PEG", "GRAHAM", "CRYPTO_RISK"] as const;
+const MODELS = ["DCF", "OWNER_EARNINGS", "PEG", "GRAHAM", "DDM"] as const;
 type Model = typeof MODELS[number];
 
 const MODEL_LABELS: Record<Model, string> = {
@@ -17,6 +17,7 @@ const MODEL_LABELS: Record<Model, string> = {
   PEG:            "PEG Ratio (Peter Lynch)",
   GRAHAM:         "Graham Number",
   CRYPTO_RISK:    "Crypto Risk-Adjusted",
+  DDM:            "Dividend Discount (DDM)",
 };
 
 export default function Research() {
@@ -34,9 +35,10 @@ export default function Research() {
   const [formVals, setFormVals]         = useState({
     currentPrice: "", earningsPerShare: "", freeCashFlowPerShare: "",
     growthRatePercent: "", discountRatePercent: "", years: "10",
-    terminalGrowthRatePercent: "2.5", exitMultiple: "20",
+    terminalGrowthRatePercent: "2.5", exitMultiple: "20", bookValuePerShare: "", dividendPerShare: "",
   });
   const [submitting, setSubmitting]     = useState(false);
+  const [valuationError, setValuationError] = useState<string | null>(null);
   const [priceRange, setPriceRange]     = useState("1y");
   const searchTimeout                   = useRef<number | null>(null);
 
@@ -72,9 +74,11 @@ export default function Research() {
     fetch(`${API}/assets/${symbol}/detail`)
       .then(r => r.json()).then(d => {
         setDetail(d);
-        const price      = d?.holding?.marketPrice;
+        const price      = d?.latestPrice ?? d?.holding?.marketPrice;
         const eps        = d?.eps;
         const fcf        = d?.freeCashFlowPerShare;
+        const bvps       = d?.bookValuePerShare;
+        const div        = d?.dividendPerShare;
         const rawGrowth  = d?.epsGrowth; // stored as decimal e.g. 0.08
         const growth     = rawGrowth != null
           ? String(Math.round(rawGrowth * 100 * 10) / 10)  // e.g. 0.083 → "8.3"
@@ -84,6 +88,8 @@ export default function Research() {
           ...(price  != null ? { currentPrice:         String(price) } : {}),
           ...(eps    != null ? { earningsPerShare:      String(eps)   } : {}),
           ...(fcf    != null ? { freeCashFlowPerShare:  String(fcf)   } : {}),
+          ...(bvps   != null ? { bookValuePerShare:     String(bvps)  } : {}),
+          ...(div    != null ? { dividendPerShare:      String(div)   } : {}),
           ...(growth          ? { growthRatePercent:    growth        } : {}),
           discountRatePercent:       prev.discountRatePercent || "10",
           years:                     prev.years               || "10",
@@ -101,6 +107,9 @@ export default function Research() {
     fetch(`${API}/financials/${symbol}`)
       .then(r => r.json()).then(d => setFinancials({ annual: d?.annual ?? [], quarterly: d?.quarterly ?? [] })).catch(console.error);
     // ^^^ reads from DB (no FMP call) — use Sync to refresh
+
+    fetch(`${API}/fmp/${symbol}/dividends`)
+      .then(r => r.json()).then(d => setDividends(Array.isArray(d) ? d : [])).catch(console.error);
   }, [symbol]);
 
   const selectSymbol = async (s: string, inLibrary: boolean) => {
@@ -130,7 +139,8 @@ export default function Research() {
   };
 
   const [financials, setFinancials]   = useState<{ annual: any[], quarterly: any[] }>({ annual: [], quarterly: [] });
-  const [finTab, setFinTab]           = useState<"profitability"|"growth"|"health"|"valuation">("profitability");
+  const [dividends, setDividends]     = useState<any[]>([]);
+  const [finTab, setFinTab]           = useState<"profitability"|"growth"|"health"|"valuation"|"dividend">("profitability");
   const [finPeriod, setFinPeriod]     = useState<"annual"|"quarter">("annual");
   const [syncing, setSyncing]       = useState(false);
   const [syncMsg, setSyncMsg]       = useState<string | null>(null);
@@ -160,13 +170,17 @@ export default function Research() {
       // Pre-fill valuation form — prefer reloaded detail, fall back to sync response
       const eps       = newDetail?.eps       ?? data.metrics?.epsTTM;
       const fcf       = newDetail?.freeCashFlowPerShare ?? data.metrics?.freeCashFlowPerShareTTM;
-      const price     = newDetail?.holding?.marketPrice;
+      const bvps      = newDetail?.bookValuePerShare ?? data.metrics?.bookValuePerShareTTM;
+      const div       = newDetail?.dividendPerShare ?? data.metrics?.dividendPerShareTTM;
+      const price     = newDetail?.latestPrice ?? newDetail?.holding?.marketPrice;
       const rawGrowth = newDetail?.epsGrowth;
       const growth    = rawGrowth != null ? String(Math.round(rawGrowth * 100 * 10) / 10) : null;
       setFormVals(prev => ({
         ...prev,
         ...(eps    != null ? { earningsPerShare:     String(eps)   } : {}),
         ...(fcf    != null ? { freeCashFlowPerShare: String(fcf)   } : {}),
+        ...(bvps   != null ? { bookValuePerShare:    String(bvps)  } : {}),
+        ...(div    != null ? { dividendPerShare:     String(div)   } : {}),
         ...(price  != null ? { currentPrice:         String(price) } : {}),
         ...(growth != null ? { growthRatePercent:    growth        } : {}),
       }));
@@ -180,8 +194,9 @@ export default function Research() {
   const handleRunValuation = async () => {
     if (!symbol) return;
     setSubmitting(true);
+    setValuationError(null);
     try {
-      await fetch(`${API}/valuations`, {
+      const res = await fetch(`${API}/valuations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -189,8 +204,11 @@ export default function Research() {
           modelType: model,
           caseType: "BASE",
           currentPrice:              Number(formVals.currentPrice),
-          earningsPerShare:          formVals.earningsPerShare          ? Number(formVals.earningsPerShare)          : null,
+          earningsPerShare:          model === "DDM"
+            ? (formVals.dividendPerShare  ? Number(formVals.dividendPerShare)  : null)
+            : (formVals.earningsPerShare  ? Number(formVals.earningsPerShare)  : null),
           freeCashFlowPerShare:      formVals.freeCashFlowPerShare      ? Number(formVals.freeCashFlowPerShare)      : null,
+          bookValuePerShare:         formVals.bookValuePerShare         ? Number(formVals.bookValuePerShare)         : null,
           growthRatePercent:         Number(formVals.growthRatePercent),
           discountRatePercent:       Number(formVals.discountRatePercent),
           years:                     Number(formVals.years),
@@ -198,11 +216,13 @@ export default function Research() {
           exitMultiple:              formVals.exitMultiple               ? Number(formVals.exitMultiple)              : null,
         }),
       });
+      if (!res.ok) throw new Error(await res.text());
       // Reload detail to pick up new scenario
       const updated = await fetch(`${API}/assets/${symbol}/detail`).then(r => r.json());
       setDetail(updated);
       setShowForm(false);
-    } catch (e) {
+    } catch (e: any) {
+      setValuationError(e.message ?? "Calculation failed");
       console.error(e);
     } finally {
       setSubmitting(false);
@@ -219,6 +239,7 @@ export default function Research() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           symbol,
+          modelType: model,
           currentPrice:         Number(formVals.currentPrice),
           earningsPerShare:     formVals.earningsPerShare     ? Number(formVals.earningsPerShare)     : null,
           freeCashFlowPerShare: formVals.freeCashFlowPerShare ? Number(formVals.freeCashFlowPerShare) : null,
@@ -237,10 +258,13 @@ export default function Research() {
 
   // Derived valuation data
   const scenarios      = detail?.valuationScenarios ?? [];
-  const bearCase       = scenarios.find((s: any) => s.caseType === "BEAR");
-  const baseCase       = scenarios.find((s: any) => s.caseType === "BASE");
-  const bullCase       = scenarios.find((s: any) => s.caseType === "BULL");
-  const latestVal      = baseCase ?? scenarios[0];
+  const bearCase       = scenarios.find((s: any) => s.caseType === "BEAR" && s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM");
+  const baseCase       = scenarios.find((s: any) => s.caseType === "BASE" && s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM");
+  const bullCase       = scenarios.find((s: any) => s.caseType === "BULL" && s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM");
+  const pegScenario    = scenarios.find((s: any) => s.modelType === "PEG");
+  const grahamScenario = scenarios.find((s: any) => s.modelType === "GRAHAM");
+  const ddmScenario    = scenarios.find((s: any) => s.modelType === "DDM");
+  const latestVal      = baseCase ?? scenarios.find((s: any) => s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM") ?? scenarios[0];
   const buyBelow       = latestVal ? Number(latestVal.intrinsicValue) * (1 - targetMos / 100) : 0;
   const taxLots        = detail?.taxLots ?? [];
   const allocations    = detail?.taxLotAllocations ?? [];
@@ -375,19 +399,38 @@ export default function Research() {
           </div>
 
           {/* Metric cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "20px", marginBottom: "32px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "16px", marginBottom: "32px" }}>
             {[
               { label: "Position Value", value: holding ? `$${Number(holding.marketValue).toLocaleString("en-US",{minimumFractionDigits:2})}` : "Not held" },
+              { label: "Current Price",  value: detail?.latestPrice != null ? `$${Number(detail.latestPrice).toLocaleString("en-US",{minimumFractionDigits:2})}` : "—" },
+              { label: "PEG Ratio", value: pegScenario ? Number(pegScenario.intrinsicValue).toFixed(2) : "—",
+                color: pegScenario ? (Number(pegScenario.intrinsicValue) < 1 ? C.green : Number(pegScenario.intrinsicValue) <= 2 ? C.gold : C.red) : C.text },
               { label: "Intrinsic Value", value: latestVal ? `$${Number(latestVal.intrinsicValue).toFixed(2)}` : "—" },
               { label: "Margin of Safety", value: latestVal ? `${Number(latestVal.marginOfSafetyPercent).toFixed(2)}%` : "—",
                 color: latestVal ? (Number(latestVal.marginOfSafetyPercent) >= 20 ? C.green : Number(latestVal.marginOfSafetyPercent) >= 0 ? C.gold : C.red) : C.text },
-              { label: `Buy Below (${targetMos}% MOS)`, value: latestVal ? `$${buyBelow.toFixed(2)}` : "—" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
                 <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
                 <h3 style={{ fontSize: "26px", marginTop: "14px", marginBottom: 0, color: color ?? C.text }}>{value}</h3>
               </div>
             ))}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>Buy Below</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "3px", marginLeft: "auto" }}>
+                  <input type="number" min={0} max={90} value={targetMos}
+                    onChange={e => setTargetMos(Number(e.target.value))}
+                    style={{ width: "44px", background: "transparent", color: C.gold,
+                      border: `1px solid rgba(200,169,106,0.4)`, borderRadius: "6px",
+                      padding: "2px 6px", fontFamily: C.font, fontSize: "12px",
+                      textAlign: "center" }} />
+                  <span style={{ color: C.muted, fontSize: "12px" }}>% MOS</span>
+                </div>
+              </div>
+              <h3 style={{ fontSize: "26px", marginTop: "14px", marginBottom: 0, color: C.text }}>
+                {latestVal ? `$${buyBelow.toFixed(2)}` : "—"}
+              </h3>
+            </div>
           </div>
 
           {/* Price History Chart */}
@@ -441,8 +484,8 @@ export default function Research() {
                 Key Metrics ({finPeriod === "annual" ? "Annual" : "Quarterly"})
               </h3>
               <div style={{ display: "flex", gap: "8px" }}>
-                {/* Period toggle */}
-                {(["annual","quarter"] as const).map(p => (
+                {/* Period toggle — hidden for dividend tab which has its own toggle */}
+                {finTab !== "dividend" && (["annual","quarter"] as const).map(p => (
                   <button key={p} onClick={() => setFinPeriod(p)} style={{
                     padding: "8px 20px", borderRadius: "999px", cursor: "pointer",
                     fontFamily: C.font, fontSize: "13px",
@@ -451,9 +494,9 @@ export default function Research() {
                     border: finPeriod === p ? `1px solid ${C.gold}` : `1px solid ${C.borderSubtle}`,
                   }}>{p === "annual" ? "Annual" : "Quarterly"}</button>
                 ))}
-                <div style={{ width: "1px", background: C.borderSubtle, margin: "0 4px" }} />
+                {finTab !== "dividend" && <div style={{ width: "1px", background: C.borderSubtle, margin: "0 4px" }} />}
                 {/* Sub-tab toggle */}
-                {(["profitability","growth","health","valuation"] as const).map(tab => (
+                {(["profitability","growth","health","valuation","dividend"] as const).map(tab => (
                   <button key={tab} onClick={() => setFinTab(tab)} style={{
                     padding: "8px 20px", borderRadius: "999px", cursor: "pointer",
                     fontFamily: C.font, fontSize: "13px", textTransform: "capitalize",
@@ -465,9 +508,187 @@ export default function Research() {
               </div>
             </div>
 
-            {financials.annual.length === 0
+            {/* ── Dividend tab ── */}
+            {finTab === "dividend" && (() => {
+              const [divPeriod, setDivPeriod] = [finPeriod, setFinPeriod];
+
+              if (dividends.length === 0) {
+                return <p style={{ color: C.muted }}>No dividend data available for this symbol.</p>;
+              }
+
+              // ── Annual aggregation ──────────────────────────────────────────
+              const byYear: Record<string, number> = {};
+              dividends.forEach((d: any) => {
+                const year = String(d.date ?? "").slice(0, 4);
+                if (year) byYear[year] = (byYear[year] ?? 0) + Number(d.adjDividend ?? 0);
+              });
+              const annualRows = Object.entries(byYear)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([year, dps]) => ({ year, dps: +dps.toFixed(4) }));
+
+              // YoY growth
+              const annualGrowth = annualRows.map((r, i) => {
+                if (i === 0) return { year: r.year, growth: null };
+                const prev = annualRows[i - 1].dps;
+                return { year: r.year, growth: prev > 0 ? +((r.dps - prev) / prev * 100).toFixed(2) : null };
+              });
+
+              // Payout ratio — use detail.eps as annual EPS proxy
+              const epsVal = detail?.eps ? Number(detail.eps) : null;
+              const annualWithPayout = annualRows.map(r => ({
+                ...r,
+                payout: epsVal && epsVal > 0 ? +((r.dps / epsVal) * 100).toFixed(1) : null,
+              }));
+
+              // ── Quarterly rows ──────────────────────────────────────────────
+              const quarterlyRows = [...dividends]
+                .sort((a: any, b: any) => (a.date ?? "").localeCompare(b.date ?? ""))
+                .map((d: any) => {
+                  const dt = d.date ?? "";
+                  const [year, month] = dt.split("-");
+                  const m = parseInt(month ?? "1", 10);
+                  const q = m <= 3 ? "Q1" : m <= 6 ? "Q2" : m <= 9 ? "Q3" : "Q4";
+                  return { label: `${q} '${(year ?? "").slice(2)}`, dps: Number(d.adjDividend ?? 0), date: dt };
+                })
+                .slice(-20); // last 20 quarters ≈ 5 years
+
+              const isAnnual = finPeriod === "annual";
+              const chartData  = isAnnual ? annualWithPayout : quarterlyRows;
+              const growthData = isAnnual ? annualGrowth.filter(r => r.growth !== null) : [];
+              const xKey = isAnnual ? "year" : "label";
+
+              const lastRow = annualRows[annualRows.length - 1];
+              const prevRow = annualRows[annualRows.length - 2];
+              const ttmDps  = lastRow?.dps ?? 0;
+              const yoyGrowth = prevRow && prevRow.dps > 0
+                ? ((ttmDps - prevRow.dps) / prevRow.dps * 100).toFixed(1)
+                : null;
+              const payoutPct = epsVal && epsVal > 0 && ttmDps > 0
+                ? ((ttmDps / epsVal) * 100).toFixed(1)
+                : null;
+
+              return (
+                <div>
+                  {/* Period toggle */}
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "28px" }}>
+                    {(["annual","quarter"] as const).map(p => (
+                      <button key={p} onClick={() => setDivPeriod(p)} style={{
+                        padding: "8px 20px", borderRadius: "999px", cursor: "pointer",
+                        fontFamily: C.font, fontSize: "13px",
+                        background: finPeriod === p ? "rgba(200,169,106,0.15)" : "transparent",
+                        color: finPeriod === p ? C.gold : C.muted,
+                        border: finPeriod === p ? `1px solid ${C.gold}` : `1px solid ${C.borderSubtle}`,
+                      }}>{p === "annual" ? "Annual" : "Quarterly"}</button>
+                    ))}
+                    {/* Summary chips */}
+                    <div style={{ marginLeft: "auto", display: "flex", gap: "16px", alignItems: "center" }}>
+                      <span style={{ color: C.muted, fontSize: "13px" }}>
+                        Latest annual DPS: <strong style={{ color: C.text }}>${ttmDps.toFixed(2)}</strong>
+                      </span>
+                      {yoyGrowth && (
+                        <span style={{ color: C.muted, fontSize: "13px" }}>
+                          YoY growth: <strong style={{ color: Number(yoyGrowth) >= 0 ? C.green : C.red }}>{yoyGrowth}%</strong>
+                        </span>
+                      )}
+                      {payoutPct && (
+                        <span style={{ color: C.muted, fontSize: "13px" }}>
+                          Payout ratio: <strong style={{ color: Number(payoutPct) > 80 ? C.red : Number(payoutPct) > 60 ? C.gold : C.green }}>{payoutPct}%</strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: growthData.length > 0 ? "1fr 1fr 1fr" : "1fr 1fr", gap: "32px" }}>
+                    {/* Chart 1: DPS */}
+                    <div>
+                      <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+                        {isAnnual ? "Annual Dividend / Share" : "Quarterly Dividend / Share"}
+                      </p>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={chartData} barSize={isAnnual ? 24 : 14}>
+                          <CartesianGrid stroke="rgba(200,169,106,0.06)" vertical={false} />
+                          <XAxis dataKey={xKey} stroke={C.muted} tick={{ fontSize: 11 }} interval={isAnnual ? 0 : "preserveStartEnd"} minTickGap={isAnnual ? 0 : 30} />
+                          <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `$${v}`} width={44} />
+                          <Tooltip
+                            contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "10px", fontFamily: C.font }}
+                            labelStyle={{ color: C.muted, fontSize: "12px" }}
+                            itemStyle={{ color: C.text }}
+                            formatter={(v: any) => [`$${Number(v).toFixed(4)}`, "DPS"]}
+                          />
+                          <Bar dataKey="dps" radius={[4,4,0,0]}>
+                            {chartData.map((_: any, i: number) => (
+                              <Cell key={i} fill={i === chartData.length - 1 ? C.gold : "rgba(200,169,106,0.45)"} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Chart 2: YoY growth (annual only) */}
+                    {isAnnual && growthData.length > 0 && (
+                      <div>
+                        <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+                          Dividend Growth YoY %
+                        </p>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={growthData} barSize={24}>
+                            <CartesianGrid stroke="rgba(200,169,106,0.06)" vertical={false} />
+                            <XAxis dataKey="year" stroke={C.muted} tick={{ fontSize: 11 }} />
+                            <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} width={44} />
+                            <Tooltip
+                              contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "10px", fontFamily: C.font }}
+                              labelStyle={{ color: C.muted, fontSize: "12px" }}
+                              itemStyle={{ color: C.text }}
+                              formatter={(v: any) => [`${Number(v).toFixed(2)}%`, "YoY Growth"]}
+                            />
+                            <Bar dataKey="growth" radius={[4,4,0,0]}>
+                              {growthData.map((r: any, i: number) => (
+                                <Cell key={i} fill={r.growth >= 0 ? C.green : C.red} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+
+                    {/* Chart 3: Payout ratio (annual only, needs EPS) */}
+                    {isAnnual && epsVal && annualWithPayout.some((r: any) => r.payout != null) && (
+                      <div>
+                        <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+                          Payout Ratio % (Dividends / EPS)
+                        </p>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={annualWithPayout.filter((r: any) => r.payout != null)} barSize={24}>
+                            <CartesianGrid stroke="rgba(200,169,106,0.06)" vertical={false} />
+                            <XAxis dataKey="year" stroke={C.muted} tick={{ fontSize: 11 }} />
+                            <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} width={44} />
+                            <Tooltip
+                              contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "10px", fontFamily: C.font }}
+                              labelStyle={{ color: C.muted, fontSize: "12px" }}
+                              itemStyle={{ color: C.text }}
+                              formatter={(v: any) => [`${Number(v).toFixed(1)}%`, "Payout Ratio"]}
+                            />
+                            <Bar dataKey="payout" radius={[4,4,0,0]}>
+                              {annualWithPayout.filter((r: any) => r.payout != null).map((r: any, i: number) => (
+                                <Cell key={i} fill={r.payout > 80 ? C.red : r.payout > 60 ? C.gold : C.green} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <p style={{ color: C.muted, fontSize: "11px", marginTop: "6px" }}>
+                          {"< 60% sustainable · 60–80% watch · > 80% at risk"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Other financial tabs ── */}
+            {finTab !== "dividend" && financials.annual.length === 0
               ? <p style={{ color: C.muted }}>No financial data yet — click ⟳ Sync to load.</p>
-              : (() => {
+              : finTab !== "dividend" && (() => {
                   const activeRows = finPeriod === "annual"
                     ? [...financials.annual].reverse()
                     : [...financials.quarterly].reverse();
@@ -575,13 +796,14 @@ export default function Research() {
                     ],
                   };
 
-                  if (rows.length === 0) {
+                  const activeCharts = charts[finTab as keyof typeof charts];
+                  if (rows.length === 0 || !activeCharts) {
                     return <p style={{ color: C.muted }}>No quarterly data — click ⟳ Sync to load.</p>;
                   }
 
                   return (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
-                      {charts[finTab].map((c: any) => (
+                      {activeCharts.map((c: any) => (
                         <MetricChart key={c.dataKey} {...c} data={mapped} />
                       ))}
                     </div>
@@ -597,14 +819,7 @@ export default function Research() {
                 <p style={labelStyle}>Intrinsic Value</p>
                 <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Valuation Range</h3>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <label style={{ color: C.muted, fontSize: "13px" }}>Target MOS</label>
-                <input type="number" min={0} max={90} value={targetMos}
-                  onChange={e => setTargetMos(Number(e.target.value))}
-                  style={{ width: "80px", background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
-                    borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
-                <span style={{ color: C.muted }}>%</span>
-              </div>
+              <div />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px", marginTop: "28px" }}>
@@ -613,7 +828,7 @@ export default function Research() {
                   <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
                   {/* Primary DCF value */}
                   <div style={{ marginTop: "12px" }}>
-                    <p style={{ color: C.muted, fontSize: "11px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Primary (DCF)</p>
+                    <p style={{ color: C.muted, fontSize: "11px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>{sc ? (MODEL_LABELS[sc.modelType as Model] ?? sc.modelType) : "—"}</p>
                     <h4 style={{ fontSize: "28px", margin: "4px 0 0", color: sc ? C.text : C.muted }}>
                       {sc ? `$${Number(sc.intrinsicValue).toFixed(2)}` : "—"}
                     </h4>
@@ -641,6 +856,79 @@ export default function Research() {
                 </div>
               ))}
             </div>
+
+            {/* PEG Ratio card */}
+            {pegScenario && (() => {
+              const ratio = Number(pegScenario.intrinsicValue);
+              const ratioColor = ratio < 1 ? C.green : ratio <= 2 ? C.gold : C.red;
+              const ratioLabel = ratio < 1 ? "Undervalued vs growth" : ratio <= 2 ? "Fairly valued vs growth" : "Overvalued vs growth";
+              return (
+                <div style={{ marginTop: "20px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px",
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "center" }}>
+                  <div>
+                    <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>PEG Ratio (Peter Lynch)</p>
+                    <h3 style={{ fontSize: "42px", margin: "8px 0 4px", color: ratioColor }}>{ratio.toFixed(2)}</h3>
+                    <p style={{ color: ratioColor, fontSize: "13px", margin: 0 }}>{ratioLabel}</p>
+                  </div>
+                  <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
+                    <p style={{ margin: 0 }}>P/E ÷ EPS Growth Rate</p>
+                    <p style={{ margin: "4px 0 0" }}>P/E: {(Number(pegScenario.currentPrice) / Number(pegScenario.earningsPerShare)).toFixed(1)}x</p>
+                    <p style={{ margin: "4px 0 0" }}>Growth: {pegScenario.growthRatePercent}%</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>{"< 1 undervalued · 1–2 fair · > 2 overvalued"}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Graham Number card */}
+            {grahamScenario && (() => {
+              const iv    = Number(grahamScenario.intrinsicValue);
+              const price = Number(grahamScenario.currentPrice);
+              const mos   = Number(grahamScenario.marginOfSafetyPercent);
+              const mosColor = mos >= 20 ? C.green : mos >= 0 ? C.gold : C.red;
+              const mosLabel = mos >= 20 ? "Trading below Graham Number" : mos >= 0 ? "Near Graham Number" : "Trading above Graham Number";
+              return (
+                <div style={{ marginTop: "20px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px",
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "center" }}>
+                  <div>
+                    <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>Graham Number</p>
+                    <h3 style={{ fontSize: "42px", margin: "8px 0 4px", color: C.text }}>${iv.toFixed(2)}</h3>
+                    <p style={{ color: mosColor, fontSize: "13px", margin: 0 }}>{mosLabel} · MOS {mos.toFixed(1)}%</p>
+                  </div>
+                  <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
+                    <p style={{ margin: 0 }}>√(22.5 × EPS × Book Value/Share)</p>
+                    <p style={{ margin: "4px 0 0" }}>EPS: ${Number(grahamScenario.earningsPerShare).toFixed(2)}</p>
+                    <p style={{ margin: "4px 0 0" }}>Current price: ${price.toFixed(2)}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>Best for asset-heavy companies</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* DDM card */}
+            {ddmScenario && (() => {
+              const iv    = Number(ddmScenario.intrinsicValue);
+              const price = Number(ddmScenario.currentPrice);
+              const mos   = Number(ddmScenario.marginOfSafetyPercent);
+              const mosColor = mos >= 20 ? C.green : mos >= 0 ? C.gold : C.red;
+              const mosLabel = mos >= 20 ? "Trading below DDM value" : mos >= 0 ? "Near DDM value" : "Trading above DDM value";
+              return (
+                <div style={{ marginTop: "20px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px",
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "center" }}>
+                  <div>
+                    <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>DDM Intrinsic Value</p>
+                    <h3 style={{ fontSize: "42px", margin: "8px 0 4px", color: C.text }}>${iv.toFixed(2)}</h3>
+                    <p style={{ color: mosColor, fontSize: "13px", margin: 0 }}>{mosLabel} · MOS {mos.toFixed(1)}%</p>
+                  </div>
+                  <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
+                    <p style={{ margin: 0 }}>D₁ / (r − g)</p>
+                    <p style={{ margin: "4px 0 0" }}>Dividend/Share (D₀): ${Number(ddmScenario.earningsPerShare).toFixed(2)}</p>
+                    <p style={{ margin: "4px 0 0" }}>Growth: {ddmScenario.growthRatePercent}% · Discount: {ddmScenario.discountRatePercent}%</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>Only reliable for dividend-paying stocks</p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Fair Value Range bar */}
             {bearCase && bullCase && (() => {
@@ -731,14 +1019,16 @@ export default function Research() {
                                       : model === "OWNER_EARNINGS" ? "FCF Growth Rate (%)"
                                       : "Growth Rate (%)";
                     const fields = [
-                      { key: "currentPrice",              label: "Current Price ($)",                                          show: true },
-                      { key: "earningsPerShare",           label: "EPS ($)",                                                    show: model !== "OWNER_EARNINGS" },
-                      { key: "freeCashFlowPerShare",       label: "FCF per Share ($)",                                          show: model === "OWNER_EARNINGS" },
-                      { key: "growthRatePercent",          label: growthLabel,                                                  show: true },
-                      { key: "discountRatePercent",        label: model === "GRAHAM" ? "Bond Yield / Discount (%)" : "Discount Rate (%)", show: model !== "PEG" },
-                      { key: "years",                      label: "Years",                                                      show: isDcfModel },
-                      { key: "terminalGrowthRatePercent",  label: "Terminal Growth Rate (%) — perpetuity",                     show: isDcfModel },
-                      { key: "exitMultiple",               label: "Exit Multiple — cross-check (optional)",                    show: isDcfModel },
+                      { key: "currentPrice",              label: "Current Price ($)",                        show: true },
+                      { key: "earningsPerShare",           label: "EPS ($)",                                  show: model !== "OWNER_EARNINGS" && model !== "GRAHAM" && model !== "DDM" },
+                      { key: "freeCashFlowPerShare",       label: "FCF per Share ($)",                        show: model === "OWNER_EARNINGS" },
+                      { key: "bookValuePerShare",          label: "Book Value per Share ($)",                 show: model === "GRAHAM" },
+                      { key: "dividendPerShare",           label: "Annual Dividend per Share ($)",            show: model === "DDM" },
+                      { key: "growthRatePercent",          label: growthLabel,                                show: model !== "PEG" && model !== "GRAHAM" },
+                      { key: "discountRatePercent",        label: "Required Return / Discount Rate (%)",     show: model !== "PEG" && model !== "GRAHAM" },
+                      { key: "years",                      label: "Years",                                    show: isDcfModel },
+                      { key: "terminalGrowthRatePercent",  label: "Terminal Growth Rate (%) — perpetuity",   show: isDcfModel },
+                      { key: "exitMultiple",               label: "Exit Multiple — cross-check (optional)",  show: isDcfModel },
                     ];
                     return (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
@@ -761,6 +1051,16 @@ export default function Research() {
                         : "Terminal growth rate = long-run perpetuity growth assumed forever after year N (anchor to GDP: 2–4%). Exit multiple is an optional cross-check."}
                     </p>
                   )}
+                  {model === "GRAHAM" && (
+                    <p style={{ color: C.muted, fontSize: "11px", marginTop: "8px" }}>
+                      Graham Number = √(22.5 × EPS × BVPS). Reliable for asset-heavy companies (banks, industrials). Sync to auto-fill EPS and Book Value/Share.
+                    </p>
+                  )}
+                  {model === "DDM" && (
+                    <p style={{ color: C.muted, fontSize: "11px", marginTop: "8px" }}>
+                      DDM = D₁ / (r − g). Only meaningful for dividend-paying stocks. Discount rate must exceed growth rate. Sync to auto-fill annual dividend/share.
+                    </p>
+                  )}
 
                   <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
                     <button onClick={handleRunValuation} disabled={submitting}
@@ -768,7 +1068,7 @@ export default function Research() {
                         padding: "12px 24px", cursor: "pointer", fontFamily: C.font, fontSize: "14px", fontWeight: 700 }}>
                       {submitting ? "Running…" : "Run Single Scenario"}
                     </button>
-                    <div style={{ position: "relative", display: "inline-block" }}
+                    {model !== "PEG" && model !== "GRAHAM" && model !== "DDM" && <div style={{ position: "relative", display: "inline-block" }}
                       onMouseEnter={e => (e.currentTarget.querySelector(".preset-tooltip") as HTMLElement)!.style.display = "block"}
                       onMouseLeave={e => (e.currentTarget.querySelector(".preset-tooltip") as HTMLElement)!.style.display = "none"}>
                       <button onClick={handleRunPresets} disabled={submitting}
@@ -815,8 +1115,11 @@ export default function Research() {
                           Price & EPS/FCF taken from your inputs above.
                         </div>
                       </div>
-                    </div>
+                    </div>}
                   </div>
+                  {valuationError && (
+                    <p style={{ color: C.red, fontSize: "13px", marginTop: "12px" }}>{valuationError}</p>
+                  )}
                 </div>
               )}
             </div>

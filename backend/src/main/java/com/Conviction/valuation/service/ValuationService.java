@@ -63,29 +63,29 @@ public class ValuationService {
                 new Preset(ValuationCaseType.BULL, 12,  9, 3.5, 26)
         );
 
-        // DCF presets — run when EPS is provided
-        if (request.earningsPerShare() != null) {
+        ValuationModelType modelType = request.modelType() != null ? request.modelType() : ValuationModelType.DCF;
+
+        if (modelType == ValuationModelType.DCF && request.earningsPerShare() != null) {
             for (Preset p : presets) {
                 ValuationRequest req = new ValuationRequest(
                         request.symbol(), ValuationModelType.DCF, p.caseType(),
                         request.currentPrice(), request.earningsPerShare(), null,
                         BigDecimal.valueOf(p.growth()), BigDecimal.valueOf(p.discount()), 10,
-                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult()));
+                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult()), null);
                 ValuationResponse resp = calculate(req);
                 persistScenario(req, resp);
                 results.add(resp);
             }
         }
 
-        // OWNER_EARNINGS presets — run when FCF per share is provided
         BigDecimal fcf = request.freeCashFlowPerShare();
-        if (fcf != null && fcf.compareTo(BigDecimal.ZERO) != 0) {
+        if (modelType == ValuationModelType.OWNER_EARNINGS && fcf != null && fcf.compareTo(BigDecimal.ZERO) != 0) {
             for (Preset p : presets) {
                 ValuationRequest req = new ValuationRequest(
                         request.symbol(), ValuationModelType.OWNER_EARNINGS, p.caseType(),
                         request.currentPrice(), null, fcf,
                         BigDecimal.valueOf(p.growth()), BigDecimal.valueOf(p.discount()), 10,
-                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult()));
+                        BigDecimal.valueOf(p.termGrowth()), BigDecimal.valueOf(p.exitMult()), null);
                 ValuationResponse resp = calculate(req);
                 persistScenario(req, resp);
                 results.add(resp);
@@ -100,19 +100,32 @@ public class ValuationService {
         BigDecimal intrinsicValue    = strategy.calculateIntrinsicValue(request);
         BigDecimal exitMultipleValue = strategy.calculateExitMultipleValue(request);
 
-        BigDecimal marginOfSafetyPercent = intrinsicValue.compareTo(BigDecimal.ZERO) == 0
-                ? BigDecimal.valueOf(-100)
-                : intrinsicValue.subtract(request.currentPrice())
-                        .divide(intrinsicValue, 4, RoundingMode.HALF_UP)
-                        .multiply(BigDecimal.valueOf(100));
-
+        BigDecimal marginOfSafetyPercent;
         String valuationLabel;
-        if (marginOfSafetyPercent.compareTo(BigDecimal.valueOf(20)) >= 0) {
-            valuationLabel = "UNDERVALUED";
-        } else if (marginOfSafetyPercent.compareTo(BigDecimal.valueOf(-10)) >= 0) {
-            valuationLabel = "FAIRLY_VALUED";
+
+        if (request.modelType() == ValuationModelType.PEG) {
+            // intrinsicValue IS the PEG ratio — MoS doesn't apply
+            marginOfSafetyPercent = BigDecimal.ZERO;
+            if (intrinsicValue.compareTo(BigDecimal.ONE) < 0) {
+                valuationLabel = "UNDERVALUED";
+            } else if (intrinsicValue.compareTo(BigDecimal.valueOf(2)) <= 0) {
+                valuationLabel = "FAIRLY_VALUED";
+            } else {
+                valuationLabel = "OVERVALUED";
+            }
         } else {
-            valuationLabel = "OVERVALUED";
+            marginOfSafetyPercent = intrinsicValue.compareTo(BigDecimal.ZERO) == 0
+                    ? BigDecimal.valueOf(-100)
+                    : intrinsicValue.subtract(request.currentPrice())
+                            .divide(intrinsicValue, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100));
+            if (marginOfSafetyPercent.compareTo(BigDecimal.valueOf(20)) >= 0) {
+                valuationLabel = "UNDERVALUED";
+            } else if (marginOfSafetyPercent.compareTo(BigDecimal.valueOf(-10)) >= 0) {
+                valuationLabel = "FAIRLY_VALUED";
+            } else {
+                valuationLabel = "OVERVALUED";
+            }
         }
 
         return new ValuationResponse(

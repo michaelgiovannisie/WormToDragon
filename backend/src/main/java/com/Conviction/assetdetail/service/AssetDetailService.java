@@ -1,5 +1,6 @@
 package com.conviction.assetdetail.service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 import com.conviction.asset.entity.Equity;
 import com.conviction.asset.repository.AssetRepository;
 import com.conviction.assetdetail.dto.AssetDetailResponse;
+import com.conviction.historicalprice.repository.HistoricalPriceRepository;
 import com.conviction.holding.dto.HoldingResponse;
 import com.conviction.holding.mapper.HoldingMapper;
 import com.conviction.holding.repository.HoldingRepository;
@@ -33,6 +35,7 @@ public class AssetDetailService {
     private final TaxLotAllocationRepository allocationRepository;
     private final TaxLotMapper taxLotMapper;
     private final AssetRepository assetRepository;
+    private final HistoricalPriceRepository historicalPriceRepository;
 
     public AssetDetailService(
         HoldingRepository holdingRepository,
@@ -43,7 +46,8 @@ public class AssetDetailService {
         TaxLotRepository taxLotRepository,
         TaxLotAllocationRepository allocationRepository,
         TaxLotMapper taxLotMapper,
-        AssetRepository assetRepository
+        AssetRepository assetRepository,
+        HistoricalPriceRepository historicalPriceRepository
     ) {
         this.holdingRepository = holdingRepository;
         this.holdingMapper = holdingMapper;
@@ -54,17 +58,20 @@ public class AssetDetailService {
         this.allocationRepository = allocationRepository;
         this.taxLotMapper = taxLotMapper;
         this.assetRepository = assetRepository;
+        this.historicalPriceRepository = historicalPriceRepository;
     }
 
     public AssetDetailResponse getAssetDetail(String symbol) {
         var asset = assetRepository.findBySymbol(symbol.toUpperCase());
         String assetName = asset.map(a -> a.getName() != null ? a.getName() : symbol).orElse(symbol);
 
-        java.math.BigDecimal eps = null, fcfPerShare = null, epsGrowth = null;
+        BigDecimal eps = null, fcfPerShare = null, epsGrowth = null, bookValuePerShare = null, dividendPerShare = null;
         if (asset.isPresent() && asset.get() instanceof Equity eq) {
-            eps        = eq.getEps();
-            fcfPerShare = eq.getFreeCashFlowPerShare();
-            epsGrowth  = eq.getEpsGrowth();
+            eps              = eq.getEps();
+            fcfPerShare      = eq.getFreeCashFlowPerShare();
+            epsGrowth        = eq.getEpsGrowth();
+            bookValuePerShare = eq.getBookValuePerShare();
+            dividendPerShare  = eq.getDividendPerShare();
         }
 
         List<ValuationScenario> scenarios =
@@ -85,6 +92,17 @@ public class AssetDetailService {
                     .findFirst()
                     .map(holdingMapper::toResponse)
                     .orElse(null);
+
+        // Latest price — independent of whether the asset is currently held.
+        // Prefer the active holding's market price (most recently refreshed);
+        // fall back to the most recent historical close.
+        BigDecimal latestPrice = holding != null ? holding.marketPrice() : null;
+        if (latestPrice == null) {
+            latestPrice = historicalPriceRepository
+                    .findTopByAssetSymbolOrderByPriceDateDesc(symbol.toUpperCase())
+                    .map(hp -> hp.getClose())
+                    .orElse(null);
+        }
 
         List<TaxLotResponse> taxLots =
         taxLotRepository
@@ -110,7 +128,10 @@ public class AssetDetailService {
                 taxLotAllocations,
                 eps,
                 fcfPerShare,
-                epsGrowth
+                epsGrowth,
+                bookValuePerShare,
+                dividendPerShare,
+                latestPrice
         );
     }
 

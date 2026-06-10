@@ -26,21 +26,29 @@ public class FMPKeyMetricsSync {
         List<Map<String, Object>> result = fmp.get("/key-metrics-ttm", List.class, "symbol", symbol);
 
         BigDecimal peRatioTTM = null;
+        BigDecimal bookValuePerShareTTM = null;
         if (result != null && !result.isEmpty()) {
             Map<String, Object> m = result.get(0);
-            peRatioTTM = toBD(m.get("peRatioTTM"));
+            peRatioTTM           = toBD(m.get("peRatioTTM"));
+            bookValuePerShareTTM  = toBD(m.get("bookValuePerShareTTM"));
+            // Note: dividendPerShareTTM is NOT present in key-metrics-ttm — computed below.
         }
 
-        // EPS TTM — from income statement
+        // EPS TTM — sum of last 4 quarters of epsDiluted (most reliable across all FMP tiers)
         BigDecimal epsTTM = null;
         BigDecimal sharesOutstanding = null;
-        List<Map<String, Object>> incomeResult = fmp.get(
+        List<Map<String, Object>> quarterlyIncome = fmp.get(
                 "/income-statement", List.class,
-                "symbol", symbol, "period", "ttm", "limit", "1");
-        if (incomeResult != null && !incomeResult.isEmpty()) {
-            Map<String, Object> inc = incomeResult.get(0);
-            epsTTM           = toBD(inc.get("epsDiluted"));
-            sharesOutstanding = toBD(inc.get("weightedAverageShsOutDil"));
+                "symbol", symbol, "period", "quarter", "limit", "4");
+        if (quarterlyIncome != null && !quarterlyIncome.isEmpty()) {
+            BigDecimal epsSum = BigDecimal.ZERO;
+            for (Map<String, Object> q : quarterlyIncome) {
+                BigDecimal qEps = toBD(q.get("epsDiluted"));
+                if (qEps != null) epsSum = epsSum.add(qEps);
+            }
+            if (epsSum.compareTo(BigDecimal.ZERO) != 0) epsTTM = epsSum;
+            // Use shares from the most recent quarter
+            sharesOutstanding = toBD(quarterlyIncome.get(0).get("weightedAverageShsOutDil"));
         }
 
         // EPS growth — YoY from 2 most recent annual income statements
@@ -73,16 +81,57 @@ public class FMPKeyMetricsSync {
             }
         }
 
+        // Dividend per share — FMP does not expose this in key-metrics-ttm.
+        // Compute from most recent annual cash flow: |commonDividendsPaid| / shares.
+        BigDecimal dividendPerShareTTM = null;
+        List<Map<String, Object>> annualCashFlow = fmp.get(
+                "/cash-flow-statement", List.class,
+                "symbol", symbol, "period", "annual", "limit", "1");
+        if (annualCashFlow != null && !annualCashFlow.isEmpty()) {
+            Map<String, Object> acf = annualCashFlow.get(0);
+            BigDecimal divPaid = toBD(acf.get("commonDividendsPaid"));
+            BigDecimal shares  = sharesOutstanding != null
+                    ? sharesOutstanding
+                    : toBD(acf.get("weightedAverageShsOutDil"));
+            if (divPaid != null && shares != null && shares.compareTo(BigDecimal.ZERO) != 0) {
+                // commonDividendsPaid is negative; negate to get the positive amount paid out
+                BigDecimal absDivPaid = divPaid.abs();
+                if (absDivPaid.compareTo(BigDecimal.ZERO) > 0) {
+                    dividendPerShareTTM = absDivPaid.divide(shares, 4, java.math.RoundingMode.HALF_UP);
+                }
+            }
+        }
+
+        // BVPS — prefer key-metrics-ttm field; fall back to computing from balance sheet
+        // totalStockholdersEquity / diluted shares outstanding
+        if (bookValuePerShareTTM == null) {
+            List<Map<String, Object>> balanceSheet = fmp.get(
+                    "/balance-sheet-statement", List.class,
+                    "symbol", symbol, "period", "annual", "limit", "1");
+            if (balanceSheet != null && !balanceSheet.isEmpty()) {
+                Map<String, Object> bs = balanceSheet.get(0);
+                BigDecimal equity = toBD(bs.get("totalStockholdersEquity"));
+                BigDecimal shares = sharesOutstanding != null
+                        ? sharesOutstanding
+                        : toBD(bs.get("commonStock"));
+                if (equity != null && shares != null && shares.compareTo(BigDecimal.ZERO) != 0) {
+                    bookValuePerShareTTM = equity.divide(shares, 4, java.math.RoundingMode.HALF_UP);
+                }
+            }
+        }
+
         Asset asset = assetRepository.findBySymbol(symbol.toUpperCase()).orElse(null);
         if (asset instanceof Equity eq) {
-            if (epsTTM        != null) eq.setEps(epsTTM);
-            if (peRatioTTM    != null) eq.setPeRatio(peRatioTTM);
-            if (fcfPerShareTTM != null) eq.setFreeCashFlowPerShare(fcfPerShareTTM);
-            if (epsGrowth     != null) eq.setEpsGrowth(epsGrowth);
+            if (epsTTM               != null) eq.setEps(epsTTM);
+            if (peRatioTTM           != null) eq.setPeRatio(peRatioTTM);
+            if (fcfPerShareTTM       != null) eq.setFreeCashFlowPerShare(fcfPerShareTTM);
+            if (epsGrowth            != null) eq.setEpsGrowth(epsGrowth);
+            if (bookValuePerShareTTM != null) eq.setBookValuePerShare(bookValuePerShareTTM);
+            if (dividendPerShareTTM  != null) eq.setDividendPerShare(dividendPerShareTTM);
             assetRepository.save(eq);
         }
 
-        return new FMPKeyMetricsResponse(symbol, epsTTM, peRatioTTM, epsGrowth, fcfPerShareTTM);
+        return new FMPKeyMetricsResponse(symbol, epsTTM, peRatioTTM, epsGrowth, fcfPerShareTTM, bookValuePerShareTTM, dividendPerShareTTM);
     }
 
     private BigDecimal toBD(Object val) {
@@ -96,6 +145,8 @@ public class FMPKeyMetricsSync {
             BigDecimal epsTTM,
             BigDecimal peRatioTTM,
             BigDecimal epsGrowth,
-            BigDecimal freeCashFlowPerShareTTM
+            BigDecimal freeCashFlowPerShareTTM,
+            BigDecimal bookValuePerShareTTM,
+            BigDecimal dividendPerShareTTM
     ) {}
 }

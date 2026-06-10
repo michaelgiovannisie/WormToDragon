@@ -53,6 +53,64 @@ public class HoldingService {
             this.taxLotRepository = taxLotRepository;
         }
 
+    /**
+     * Resets the holding for the given symbol to zero and replays every stored
+     * BUY/SELL/DIVIDEND transaction in chronological order. Fixes holdings that
+     * became corrupted by duplicate imports caused by scale-4 precision mismatch.
+     *
+     * @return a diagnostic string describing the rebuilt state
+     */
+    @Transactional
+    public String rebuildHoldingForSymbol(String symbol) {
+        List<com.conviction.holding.entity.Holding> holdings =
+                holdingRepository.findByAssetSymbol(symbol.toUpperCase());
+
+        if (holdings.isEmpty()) {
+            return "No holding found for " + symbol;
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        for (Holding h : holdings) {
+            // Reset to clean state
+            h.setQuantityHeld(BigDecimal.ZERO);
+            h.setTotalCostBasis(BigDecimal.ZERO);
+            h.setMarketPrice(BigDecimal.ZERO);
+            h.setMarketValue(BigDecimal.ZERO);
+            h.setUnrealizedGain(BigDecimal.ZERO);
+            h.setActive(false);
+            holdingRepository.save(h);
+
+            // Replay all transactions in date order
+            List<Transaction> txns =
+                    transactionRepository.findByAccountIdAndAssetIdForReplay(
+                            h.getAccount().getId(),
+                            h.getAsset().getId()
+                    );
+
+            for (Transaction t : txns) {
+                try {
+                    updateHoldingFromTransaction(t);
+                } catch (Exception e) {
+                    result.append("  WARN skipped txn ")
+                          .append(t.getId()).append(": ").append(e.getMessage()).append("\n");
+                }
+            }
+
+            // Re-read to get final state after replay
+            Holding rebuilt = holdingRepository.findById(h.getId()).orElse(h);
+
+            result.append("Rebuilt ").append(symbol)
+                  .append(" → qty=").append(rebuilt.getQuantityHeld())
+                  .append(", costBasis=").append(rebuilt.getTotalCostBasis())
+                  .append(", active=").append(rebuilt.getActive())
+                  .append(", txns=").append(txns.size())
+                  .append("\n");
+        }
+
+        return result.toString();
+    }
+
     @Transactional
     public int refreshPricesForSymbol(String symbol) {
         return historicalPriceRepository

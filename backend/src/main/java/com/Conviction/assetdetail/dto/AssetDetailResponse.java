@@ -19,6 +19,10 @@ public record AssetDetailResponse(
         List<TaxLotAllocationResponse> taxLotAllocations,
         BigDecimal eps,
         BigDecimal freeCashFlowPerShare,
-        BigDecimal epsGrowth
+        BigDecimal epsGrowth,
+        BigDecimal bookValuePerShare,
+        BigDecimal dividendPerShare,
+        /** Latest closing price from historical_prices — present even when the asset is not held. */
+        BigDecimal latestPrice
 ) {
 }

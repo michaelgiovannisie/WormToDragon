@@ -87,13 +87,20 @@ public class RobinhoodImportService {
                 assetsCreated++;
         }
 
+        // Round to scale 4 before duplicate check — quantities/prices are stored
+        // as NUMERIC(19,4), so 1.973266 is persisted as 1.9733. Comparing the raw
+        // 6-decimal CSV value against the stored value always fails, causing every
+        // fractional-share transaction to be re-imported on every upload.
+        BigDecimal qty4   = row.quantity()   .setScale(4, java.math.RoundingMode.HALF_UP);
+        BigDecimal price4 = row.pricePerUnit().setScale(4, java.math.RoundingMode.HALF_UP);
+
         boolean duplicate =
                 transactionRepository.existsByAccountIdAndAssetIdAndTransactionTypeAndQuantityAndPricePerUnitAndFeesAndTransactionDate(
                         account.getId(),
                         asset.getId(),
                         row.transactionType(),
-                        row.quantity(),
-                        row.pricePerUnit(),
+                        qty4,
+                        price4,
                         BigDecimal.ZERO,
                         row.transactionDate()
                 );

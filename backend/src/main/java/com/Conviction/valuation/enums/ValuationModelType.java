@@ -6,5 +6,6 @@ public enum ValuationModelType {
     DCF,               // discounted cash flow
     PEG,               // price/earnings to growth (Peter Lynch)
     GRAHAM,            // Benjamin Graham Number
-    CRYPTO_RISK        // risk-adjusted intrinsic value for crypto assets
+    CRYPTO_RISK,       // risk-adjusted intrinsic value for crypto assets
+    DDM                // Dividend Discount Model (Gordon Growth Model)
 }

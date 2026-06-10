@@ -32,6 +32,7 @@ public class FMPSyncController {
     private final HoldingRepository holdingRepository;
     private final Nasdaq100SyncService nasdaq100SyncService;
     private final HoldingsSyncService holdingsSyncService;
+    private final FMPClient fmpClient;
 
     public FMPSyncController(
             FMPHistoricalPriceSync historicalSync,
@@ -41,7 +42,8 @@ public class FMPSyncController {
             HoldingService holdingService,
             HoldingRepository holdingRepository,
             Nasdaq100SyncService nasdaq100SyncService,
-            HoldingsSyncService holdingsSyncService
+            HoldingsSyncService holdingsSyncService,
+            FMPClient fmpClient
     ) {
         this.historicalSync       = historicalSync;
         this.profileSync          = profileSync;
@@ -51,6 +53,7 @@ public class FMPSyncController {
         this.holdingRepository    = holdingRepository;
         this.nasdaq100SyncService = nasdaq100SyncService;
         this.holdingsSyncService  = holdingsSyncService;
+        this.fmpClient            = fmpClient;
     }
 
     /** Fetch and store EOD OHLCV history. Optional from/to to limit range. */
@@ -167,5 +170,18 @@ public class FMPSyncController {
     @GetMapping("/sync-holdings-bg/status")
     public HoldingsSyncService.JobStatus getHoldingsSyncStatus() {
         return holdingsSyncService.getStatus();
+    }
+
+    // ── Dividend history passthrough ──────────────────────────────────────────
+
+    /**
+     * Returns the full dividend payment history for a symbol directly from FMP.
+     * Each record: { date, adjDividend, dividend, yield, frequency, paymentDate, ... }
+     */
+    @SuppressWarnings("unchecked")
+    @GetMapping("/{symbol}/dividends")
+    public List<?> getDividendHistory(@PathVariable String symbol) {
+        List<?> result = fmpClient.get("/dividends", List.class, "symbol", symbol.toUpperCase());
+        return result != null ? result : List.of();
     }
 }

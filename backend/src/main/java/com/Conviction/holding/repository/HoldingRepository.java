@@ -66,6 +66,7 @@ public interface HoldingRepository extends JpaRepository<Holding, UUID> {
         JOIN FETCH h.account
         WHERE h.asset.symbol = :symbol
         AND h.active = true
+        AND h.quantityHeld > 0.001
         """)
     List<Holding> findActiveByAssetSymbolWithAssetAndAccount(
             @Param("symbol") String symbol

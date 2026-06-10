@@ -35,4 +35,10 @@ public class Equity extends Asset {
     /** YoY EPS growth, stored as decimal e.g. 0.08 = 8% */
     @Column(precision = 19, scale = 8)
     private BigDecimal epsGrowth;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal bookValuePerShare;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal dividendPerShare;
 }

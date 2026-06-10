@@ -33,10 +33,14 @@ public class ValuationController {
     }
 
     @PostMapping
-    public ValuationResponse calculateValuation(
+    public org.springframework.http.ResponseEntity<?> calculateValuation(
             @RequestBody ValuationRequest request
     ) {
-        return valuationService.calculateIntrinsicValue(request);
+        try {
+            return org.springframework.http.ResponseEntity.ok(valuationService.calculateIntrinsicValue(request));
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @PostMapping("/presets")
