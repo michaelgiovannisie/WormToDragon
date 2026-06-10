@@ -19,7 +19,14 @@ public interface TransactionRepository
 
     List<Transaction> findByAssetId(UUID assetId);
 
-    List<Transaction> findByAccountPortfolioId(UUID portfolioId);
+    @Query("""
+        SELECT t
+        FROM Transaction t
+        JOIN FETCH t.account a
+        JOIN FETCH t.asset
+        WHERE a.portfolio.id = :portfolioId
+        """)
+    List<Transaction> findByAccountPortfolioId(@Param("portfolioId") UUID portfolioId);
 
     List<Transaction> findByAccountIdAndTransactionType(
             UUID accountId,

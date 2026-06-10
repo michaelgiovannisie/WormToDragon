@@ -3,12 +3,12 @@ package com.conviction.dca.strategy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import org.springframework.stereotype.Component;
-
 import com.conviction.dca.dto.DCAInput;
 import com.conviction.dca.dto.DCARecommendation;
 
-/**
+/** @deprecated Replaced by ConvictionDCAStrategy. Safe to delete.
+ * @see ConvictionDCAStrategy
+ *
  * Buys more when MOS exceeds a threshold, with deployment amount scaling
  * proportionally to how deep the discount is.
  *
@@ -18,7 +18,6 @@ import com.conviction.dca.dto.DCARecommendation;
  *   MOS 0–10%   → HOLD
  *   MOS < 0%    → REDUCE (overvalued)
  */
-@Component
 public class ValueFocusedDCAStrategy implements DCARecommendationStrategy {
 
     @Override

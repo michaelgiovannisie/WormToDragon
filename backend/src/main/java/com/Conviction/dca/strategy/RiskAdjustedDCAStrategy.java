@@ -3,8 +3,6 @@ package com.conviction.dca.strategy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import org.springframework.stereotype.Component;
-
 import com.conviction.dca.dto.DCAInput;
 import com.conviction.dca.dto.DCARecommendation;
 
@@ -21,7 +19,6 @@ import com.conviction.dca.dto.DCARecommendation;
  *
  * currentPositionWeight = totalCostBasis / (totalCostBasis + availableCash)
  */
-@Component
 public class RiskAdjustedDCAStrategy implements DCARecommendationStrategy {
 
     @Override

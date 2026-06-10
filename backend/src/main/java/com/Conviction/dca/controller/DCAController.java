@@ -1,7 +1,6 @@
 package com.conviction.dca.controller;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,17 +24,8 @@ public class DCAController {
     @GetMapping("/{symbol}/recommendation")
     public DCARecommendation getRecommendation(
             @PathVariable String symbol,
-            @RequestParam(defaultValue = "VALUE_FOCUSED") String strategy,
             @RequestParam(required = false) BigDecimal availableCash
     ) {
-        return dcaService.getRecommendation(symbol, strategy, availableCash);
-    }
-
-    @GetMapping("/{symbol}/all")
-    public List<DCARecommendation> getAllRecommendations(
-            @PathVariable String symbol,
-            @RequestParam(required = false) BigDecimal availableCash
-    ) {
-        return dcaService.getAllRecommendations(symbol, availableCash);
+        return dcaService.getRecommendation(symbol.toUpperCase(), availableCash);
     }
 }

@@ -7,7 +7,8 @@ const NAV = [
   { to: "/research",  label: "Research"  },
 
   { to: "/tax",       label: "Tax"       },
-  { to: "/import",    label: "Import"    },
+  { to: "/import",        label: "Import"       },
+  { to: "/benchmarking", label: "Benchmarking" },
 ];
 
 export default function Sidebar() {

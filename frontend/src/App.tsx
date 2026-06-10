@@ -4,7 +4,8 @@ import Dashboard  from "./pages/Dashboard";
 import Holdings   from "./pages/Holdings";
 import Research   from "./pages/Research";
 import Tax        from "./pages/Tax";
-import Import     from "./pages/Import";
+import Import        from "./pages/Import";
+import Benchmarking from "./pages/Benchmarking";
 
 import { C }      from "./theme";
 
@@ -19,7 +20,8 @@ export default function App() {
             <Route path="/holdings"  element={<Holdings />}  />
             <Route path="/research"  element={<Research />}  />
             <Route path="/tax"       element={<Tax />}       />
-            <Route path="/import"    element={<Import />}    />
+            <Route path="/import"         element={<Import />}        />
+            <Route path="/benchmarking"   element={<Benchmarking />}  />
 
           </Routes>
         </main>

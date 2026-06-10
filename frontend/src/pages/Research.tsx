@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, ReferenceLine, BarChart, Bar, Cell,
+  CartesianGrid, ReferenceLine, BarChart, Bar, Cell, Legend, LabelList,
 } from "recharts";
 import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
@@ -30,8 +30,14 @@ export default function Research() {
   const [targetMos, setTargetMos]       = useState(25);
   const [showForm, setShowForm]         = useState(false);
   const [model, setModel]               = useState<Model>("DCF");
-  const [dcaRecs, setDcaRecs]           = useState<any[]>([]);
+  const [dcaRec, setDcaRec]             = useState<any>(null);
   const [dcaCash, setDcaCash]           = useState("1000");
+  const [dcaAddAmount, setDcaAddAmount] = useState("1000");
+  const [activeIVLines, setActiveIVLines] = useState<Set<string>>(new Set());
+  const [showIVToggles, setShowIVToggles] = useState(false);
+  const [valView, setValView]             = useState<"compare" | "trend">("compare");
+  const [txFilter, setTxFilter]           = useState<"all" | "buy" | "sell">("all");
+  const [lotSort, setLotSort]             = useState<{ col: string; dir: "asc" | "desc" }>({ col: "acquisitionDate", dir: "asc" });
   const [formVals, setFormVals]         = useState({
     currentPrice: "", earningsPerShare: "", freeCashFlowPerShare: "",
     growthRatePercent: "", discountRatePercent: "", years: "10",
@@ -101,8 +107,8 @@ export default function Research() {
     fetch(`${API}/historical-prices/${symbol}`)
       .then(r => r.json()).then(d => setPrices(Array.isArray(d) ? d : [])).catch(console.error);
 
-    fetch(`${API}/dca/${symbol}/all?availableCash=${dcaCash}`)
-      .then(r => r.json()).then(setDcaRecs).catch(console.error);
+    fetch(`${API}/dca/${symbol}/recommendation?availableCash=${dcaCash}`)
+      .then(r => r.json()).then(setDcaRec).catch(console.error);
 
     fetch(`${API}/financials/${symbol}`)
       .then(r => r.json()).then(d => setFinancials({ annual: d?.annual ?? [], quarterly: d?.quarterly ?? [] })).catch(console.error);
@@ -134,8 +140,8 @@ export default function Research() {
 
   const refreshDCA = (cash: string) => {
     if (!symbol) return;
-    fetch(`${API}/dca/${symbol}/all?availableCash=${cash}`)
-      .then(r => r.json()).then(setDcaRecs).catch(console.error);
+    fetch(`${API}/dca/${symbol}/recommendation?availableCash=${cash}`)
+      .then(r => r.json()).then(setDcaRec).catch(console.error);
   };
 
   const [financials, setFinancials]   = useState<{ annual: any[], quarterly: any[] }>({ annual: [], quarterly: [] });
@@ -272,6 +278,31 @@ export default function Research() {
   const holding        = detail?.holding;
   const avgCost        = holding ? Number(holding.averageCostBasis) : null;
 
+  // IV reference lines — one entry per unique model+case scenario
+  const IV_MODEL_COLORS: Record<string, string> = {
+    DCF:            "#60a5fa",  // blue
+    OWNER_EARNINGS: "#a78bfa",  // purple
+    PEG:            "#34d399",  // teal
+    GRAHAM:         "#fb923c",  // orange
+    DDM:            "#f472b6",  // pink
+    CRYPTO_RISK:    "#94a3b8",  // slate
+    EPS_MULTIPLE:   "#facc15",  // yellow
+  };
+  const IV_CASE_DASH: Record<string, string> = {
+    BASE: "none",
+    BULL: "8 4",
+    BEAR: "3 3",
+  };
+  const ivLines = (detail?.valuationScenarios ?? []).map((s: any) => ({
+    key:   `${s.modelType}_${s.caseType}`,
+    label: `${(MODEL_LABELS as any)[s.modelType] ?? s.modelType} · ${s.caseType}`,
+    iv:    Number(s.intrinsicValue),
+    color: IV_MODEL_COLORS[s.modelType] ?? "#94a3b8",
+    dash:  IV_CASE_DASH[s.caseType]    ?? "6 3",
+  })).filter((l: any) => l.iv > 0)
+    // deduplicate by key, keep most recent (array is already desc by createdAt from backend)
+    .filter((l: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.key === l.key) === i);
+
   const priceChartData = (() => {
     const all = prices.map((p: any) => ({ date: p.priceDate, close: Number(p.close) }));
     if (priceRange === "all" || all.length === 0) return all;
@@ -292,6 +323,48 @@ export default function Research() {
     intrinsicValue: Number(s.intrinsicValue ?? 0),
     case: s.caseType,
   }));
+
+  // Model comparison: latest scenario per model type
+  const latestByModel: Record<string, any> = {};
+  for (const s of scenarios) {
+    if (!latestByModel[s.modelType]) latestByModel[s.modelType] = s;
+  }
+  const modelComparisonData = Object.values(latestByModel).map((s: any) => ({
+    model:  (MODEL_LABELS as any)[s.modelType] ?? s.modelType,
+    iv:     Number(s.intrinsicValue ?? 0),
+    mos:    Number(s.marginOfSafetyPercent ?? 0),
+    label:  s.valuationLabel,
+    caseType: s.caseType,
+  }));
+
+  // Trend: one series per model, chronological
+  const trendByModel: Record<string, { date: string; iv: number }[]> = {};
+  for (const s of [...scenarios].reverse()) {
+    const key = s.modelType;
+    if (!trendByModel[key]) trendByModel[key] = [];
+    trendByModel[key].push({ date: new Date(s.createdAt).toLocaleDateString(), iv: Number(s.intrinsicValue ?? 0) });
+  }
+  const TREND_COLORS: Record<string, string> = {
+    DCF:            "#60a5fa",
+    OWNER_EARNINGS: "#a78bfa",
+    PEG:            "#34d399",
+    GRAHAM:         "#fb923c",
+    DDM:            "#f472b6",
+    CRYPTO_RISK:    "#94a3b8",
+    EPS_MULTIPLE:   "#facc15",
+  };
+  // Merge all dates across models for a unified X axis
+  const allTrendDates = [...new Set(
+    Object.values(trendByModel).flatMap(pts => pts.map(p => p.date))
+  )];
+  const mergedTrendData = allTrendDates.map(date => {
+    const row: Record<string, any> = { date };
+    for (const [model, pts] of Object.entries(trendByModel)) {
+      const pt = pts.find(p => p.date === date);
+      if (pt) row[model] = pt.iv;
+    }
+    return row;
+  });
 
   const inputStyle: React.CSSProperties = {
     background: C.bg,
@@ -399,19 +472,25 @@ export default function Research() {
           </div>
 
           {/* Metric cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "16px", marginBottom: "32px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(8,1fr)", gap: "16px", marginBottom: "32px" }}>
             {[
               { label: "Position Value", value: holding ? `$${Number(holding.marketValue).toLocaleString("en-US",{minimumFractionDigits:2})}` : "Not held" },
+              { label: "Unrealized Gain",
+                value: holding ? `${Number(holding.unrealizedGain) >= 0 ? "+" : ""}$${Number(holding.unrealizedGain).toLocaleString("en-US",{minimumFractionDigits:2})}` : "—",
+                color: holding ? (Number(holding.unrealizedGain) >= 0 ? C.green : C.red) : C.text,
+                sub: holding ? `${Number(holding.unrealizedGainPercent) >= 0 ? "+" : ""}${Number(holding.unrealizedGainPercent).toFixed(2)}%` : undefined,
+              },
               { label: "Current Price",  value: detail?.latestPrice != null ? `$${Number(detail.latestPrice).toLocaleString("en-US",{minimumFractionDigits:2})}` : "—" },
               { label: "PEG Ratio", value: pegScenario ? Number(pegScenario.intrinsicValue).toFixed(2) : "—",
                 color: pegScenario ? (Number(pegScenario.intrinsicValue) < 1 ? C.green : Number(pegScenario.intrinsicValue) <= 2 ? C.gold : C.red) : C.text },
               { label: "Intrinsic Value", value: latestVal ? `$${Number(latestVal.intrinsicValue).toFixed(2)}` : "—" },
               { label: "Margin of Safety", value: latestVal ? `${Number(latestVal.marginOfSafetyPercent).toFixed(2)}%` : "—",
                 color: latestVal ? (Number(latestVal.marginOfSafetyPercent) >= 20 ? C.green : Number(latestVal.marginOfSafetyPercent) >= 0 ? C.gold : C.red) : C.text },
-            ].map(({ label, value, color }) => (
+            ].map(({ label, value, color, sub }: any) => (
               <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
                 <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
                 <h3 style={{ fontSize: "26px", marginTop: "14px", marginBottom: 0, color: color ?? C.text }}>{value}</h3>
+                {sub && <p style={{ color: color ?? C.muted, fontSize: "13px", margin: "4px 0 0" }}>{sub}</p>}
               </div>
             ))}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
@@ -435,7 +514,7 @@ export default function Research() {
 
           {/* Price History Chart */}
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
               <div>
                 <p style={labelStyle}>Price History</p>
                 <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>
@@ -458,6 +537,58 @@ export default function Research() {
                 ))}
               </div>
             </div>
+
+            {/* IV line toggles */}
+            {ivLines.length > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <button onClick={() => setShowIVToggles(v => !v)} style={{
+                  background: "none", border: `1px solid ${C.border}`, color: C.muted,
+                  borderRadius: "8px", padding: "4px 12px", fontSize: "12px", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "6px",
+                }}>
+                  <span>Intrinsic Value Lines</span>
+                  {activeIVLines.size > 0 && (
+                    <span style={{ background: C.gold, color: "#000", borderRadius: "999px",
+                      padding: "1px 7px", fontSize: "11px", fontWeight: 700 }}>
+                      {activeIVLines.size}
+                    </span>
+                  )}
+                  <span style={{ fontSize: "10px" }}>{showIVToggles ? "▲" : "▼"}</span>
+                </button>
+                {showIVToggles && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px", alignItems: "center" }}>
+                    {ivLines.map((l: any) => {
+                      const active = activeIVLines.has(l.key);
+                      return (
+                        <button key={l.key} onClick={() => {
+                          setActiveIVLines(prev => {
+                            const next = new Set(prev);
+                            active ? next.delete(l.key) : next.add(l.key);
+                            return next;
+                          });
+                        }} style={{
+                          display: "flex", alignItems: "center", gap: "6px",
+                          padding: "4px 12px", borderRadius: "999px", fontSize: "12px", cursor: "pointer",
+                          border: `1px solid ${active ? l.color : C.border}`,
+                          background: active ? `${l.color}18` : "transparent",
+                          color: active ? l.color : C.muted,
+                          transition: "all 0.15s",
+                        }}>
+                          <svg width="20" height="10" style={{ flexShrink: 0 }}>
+                            <line x1="0" y1="5" x2="20" y2="5"
+                              stroke={active ? l.color : C.muted}
+                              strokeWidth="2"
+                              strokeDasharray={l.dash === "none" ? undefined : l.dash} />
+                          </svg>
+                          {l.label} · ${l.iv.toFixed(2)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {priceChartData.length === 0
               ? <p style={{ color: C.muted }}>No price data yet — click "Sync from FMP" to load history.</p>
               : <ResponsiveContainer width="100%" height={300}>
@@ -470,6 +601,13 @@ export default function Research() {
                       <ReferenceLine y={avgCost} stroke={C.gold} strokeDasharray="6 3"
                         label={{ value: `Avg Cost $${avgCost.toFixed(2)}`, fill: C.gold, fontSize: 11, position: "insideTopRight" }} />
                     )}
+                    {ivLines.filter((l: any) => activeIVLines.has(l.key)).map((l: any) => (
+                      <ReferenceLine key={l.key} y={l.iv}
+                        stroke={l.color}
+                        strokeDasharray={l.dash === "none" ? undefined : l.dash}
+                        strokeWidth={1.5}
+                        label={{ value: `${l.label} $${l.iv.toFixed(2)}`, fill: l.color, fontSize: 10, position: "insideBottomRight" }} />
+                    ))}
                     <Line type="monotone" dataKey="close" stroke={C.green} strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -1125,196 +1263,474 @@ export default function Research() {
             </div>
           </section>
 
-          {/* DCA Recommendation */}
-          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
-              <div>
-                <p style={labelStyle}>DCA Intelligence</p>
-                <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Position Recommendation</h3>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <label style={{ color: C.muted, fontSize: "13px" }}>Available Cash ($)</label>
-                <input
-                  type="number" value={dcaCash}
-                  onChange={e => { setDcaCash(e.target.value); }}
-                  onBlur={e => refreshDCA(e.target.value)}
-                  style={{ width: "100px", background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
-                    borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
-              </div>
-            </div>
+          {/* DCA Intelligence */}
+          {(() => {
+            const holding       = detail?.holding;
+            const currentPrice  = Number(detail?.latestPrice ?? holding?.marketPrice ?? 0);
+            const qtyHeld       = Number(holding?.quantityHeld ?? 0);
+            const costBasis     = Number(holding?.totalCostBasis ?? 0);
+            const avgCost       = Number(holding?.averageCostBasis ?? 0);
 
-            {dcaRecs.length === 0
-              ? <p style={{ color: C.muted }}>Run a valuation scenario first to unlock DCA recommendations.</p>
-              : <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px" }}>
-                  {dcaRecs.map((rec: any) => {
-                    const actionColor = rec.action === "BUY_MORE" ? C.green : rec.action === "REDUCE" ? C.red : C.gold;
-                    const stratLabel: Record<string, string> = {
-                      VALUE_FOCUSED:    "Value Focused",
-                      RISK_ADJUSTED:    "Risk Adjusted",
-                      AGGRESSIVE_GROWTH: "Aggressive Growth",
-                    };
-                    return (
-                      <div key={rec.strategyUsed} style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
-                        <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                          {stratLabel[rec.strategyUsed] ?? rec.strategyUsed}
-                        </p>
+            // Best valuation scenario (highest IV from most-recent base, or first)
+            const scenarios: any[] = detail?.valuationScenarios ?? [];
+            const bestScenario = scenarios.find((s: any) => s.caseType === "BASE") ?? scenarios[0] ?? null;
+            const intrinsicValue = bestScenario ? Number(bestScenario.intrinsicValue) : null;
 
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                          <span style={{ padding: "4px 14px", borderRadius: "999px", fontSize: "12px", fontWeight: 700,
-                            background: rec.action === "BUY_MORE" ? "rgba(143,214,148,0.12)" : rec.action === "REDUCE" ? "rgba(224,108,117,0.12)" : "rgba(200,169,106,0.12)",
-                            color: actionColor }}>
-                            {rec.action.replace("_", " ")}
-                          </span>
-                          <span style={{ color: C.muted, fontSize: "12px" }}>
-                            {rec.confidenceScore}% confidence
-                          </span>
+            // Average Down Calculator
+            const addAmt       = Math.max(0, Number(dcaAddAmount) || 0);
+            const boughtShares = currentPrice > 0 ? addAmt / currentPrice : 0;
+            const newQty       = qtyHeld + boughtShares;
+            const newCostBasis = costBasis + addAmt;
+            const newAvgCost   = newQty > 0 ? newCostBasis / newQty : 0;
+            const newUnrealPnl = currentPrice > 0 ? (currentPrice - newAvgCost) * newQty : 0;
+            const newUnrealPct = newAvgCost > 0 ? ((currentPrice - newAvgCost) / newAvgCost) * 100 : 0;
+            const avgCostDelta = newAvgCost - avgCost;
+
+            // Entry Price Targets (from intrinsic value)
+            const targets = intrinsicValue
+              ? [
+                  { mos: 10, price: intrinsicValue * 0.90 },
+                  { mos: 20, price: intrinsicValue * 0.80 },
+                  { mos: 30, price: intrinsicValue * 0.70 },
+                  { mos: 40, price: intrinsicValue * 0.60 },
+                ]
+              : [];
+
+            return (
+              <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
+                  <div>
+                    <p style={labelStyle}>DCA Intelligence</p>
+                    <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Add to Position</h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <label style={{ color: C.muted, fontSize: "13px" }}>Available Cash ($)</label>
+                    <input
+                      type="number" value={dcaCash}
+                      onChange={e => setDcaCash(e.target.value)}
+                      onBlur={e => refreshDCA(e.target.value)}
+                      style={{ width: "100px", background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
+                        borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
+                  </div>
+                </div>
+
+                {!dcaRec
+                  ? <p style={{ color: C.muted }}>Run a valuation scenario first to unlock DCA recommendations.</p>
+                  : <>
+                      {/* ── Recommendation card ── */}
+                      {(() => {
+                        const rec = dcaRec;
+                        const actionColor = rec.action === "BUY_MORE" ? C.green : rec.action === "REDUCE" ? C.red : C.gold;
+                        return (
+                          <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "28px", marginBottom: "24px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
+                                  <span style={{ padding: "5px 18px", borderRadius: "999px", fontSize: "13px", fontWeight: 700,
+                                    background: rec.action === "BUY_MORE" ? "rgba(143,214,148,0.12)" : rec.action === "REDUCE" ? "rgba(224,108,117,0.12)" : "rgba(200,169,106,0.12)",
+                                    color: actionColor }}>
+                                    {rec.action.replace("_", " ")}
+                                  </span>
+                                  <span style={{ color: C.muted, fontSize: "13px" }}>{rec.confidenceScore}% confidence</span>
+                                </div>
+                                {rec.action === "BUY_MORE" && (
+                                  <p style={{ color: C.text, fontSize: "28px", fontWeight: 600, margin: "0 0 4px" }}>
+                                    ${Number(rec.suggestedAmount).toFixed(2)}
+                                    <span style={{ color: C.muted, fontSize: "15px", fontWeight: 400, marginLeft: "10px" }}>
+                                      ≈ {Number(rec.suggestedQuantity).toFixed(4)} shares
+                                    </span>
+                                  </p>
+                                )}
+                                <p style={{ color: C.muted, fontSize: "14px", lineHeight: "1.6", margin: "8px 0 0" }}>
+                                  {rec.rationale}
+                                </p>
+                              </div>
+                              {/* Confidence ring */}
+                              <div style={{ textAlign: "center", minWidth: "64px" }}>
+                                <svg width="64" height="64" viewBox="0 0 64 64">
+                                  <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(200,169,106,0.1)" strokeWidth="6" />
+                                  <circle cx="32" cy="32" r="26" fill="none" stroke={actionColor} strokeWidth="6"
+                                    strokeDasharray={`${2 * Math.PI * 26 * rec.confidenceScore / 100} ${2 * Math.PI * 26}`}
+                                    strokeLinecap="round" transform="rotate(-90 32 32)" />
+                                </svg>
+                                <p style={{ color: C.muted, fontSize: "11px", margin: "-4px 0 0" }}>{rec.confidenceScore}%</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* ── Two-column: Avg Down Calculator + Entry Targets ── */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+
+                        {/* Average Down Calculator */}
+                        <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
+                          <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                            Average Down Calculator
+                          </p>
+                          <p style={{ color: C.text, fontSize: "13px", margin: "0 0 18px", lineHeight: "1.5" }}>
+                            If you buy more now, what happens to your position?
+                          </p>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+                            <label style={{ color: C.muted, fontSize: "13px", whiteSpace: "nowrap" }}>Add ($)</label>
+                            <input
+                              type="number" value={dcaAddAmount}
+                              onChange={e => setDcaAddAmount(e.target.value)}
+                              style={{ flex: 1, background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
+                                borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
+                          </div>
+
+                          {qtyHeld > 0 ? (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                              {[
+                                { label: "New Avg Cost",     val: newAvgCost > 0 ? `$${newAvgCost.toFixed(2)}` : "—",
+                                  sub: avgCostDelta !== 0 ? `${avgCostDelta > 0 ? "+" : ""}$${avgCostDelta.toFixed(2)} vs now` : "no change",
+                                  color: avgCostDelta < 0 ? C.green : avgCostDelta > 0 ? C.red : C.muted },
+                                { label: "New Shares",       val: newQty > 0 ? newQty.toFixed(4) : "—",
+                                  sub: `+${boughtShares.toFixed(4)} shares`, color: C.muted },
+                                { label: "Unrealized P&L",   val: newUnrealPnl !== 0 ? `${newUnrealPnl >= 0 ? "+" : ""}$${newUnrealPnl.toFixed(2)}` : "—",
+                                  sub: `${newUnrealPct >= 0 ? "+" : ""}${newUnrealPct.toFixed(2)}%`,
+                                  color: newUnrealPnl >= 0 ? C.green : C.red },
+                                { label: "Total Cost Basis", val: `$${newCostBasis.toFixed(2)}`,
+                                  sub: `+$${addAmt.toFixed(2)} added`, color: C.muted },
+                              ].map(item => (
+                                <div key={item.label} style={{ background: "rgba(200,169,106,0.04)", borderRadius: "12px", padding: "14px" }}>
+                                  <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{item.label}</p>
+                                  <p style={{ color: C.text, fontSize: "18px", fontWeight: 600, margin: "0 0 2px" }}>{item.val}</p>
+                                  <p style={{ color: item.color, fontSize: "11px", margin: 0 }}>{item.sub}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p style={{ color: C.muted, fontSize: "13px" }}>No current position — avg-down calculator requires an existing holding.</p>
+                          )}
                         </div>
 
-                        {rec.action === "BUY_MORE" && (
-                          <>
-                            <p style={{ color: C.text, fontSize: "22px", margin: "0 0 4px", fontWeight: 600 }}>
-                              ${Number(rec.suggestedAmount).toFixed(2)}
-                            </p>
-                            <p style={{ color: C.muted, fontSize: "13px", margin: "0 0 12px" }}>
-                              ≈ {Number(rec.suggestedQuantity).toFixed(4)} shares
-                            </p>
-                          </>
-                        )}
+                        {/* Entry Price Targets */}
+                        <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
+                          <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                            Entry Price Targets
+                          </p>
+                          <p style={{ color: C.text, fontSize: "13px", margin: "0 0 18px", lineHeight: "1.5" }}>
+                            What price achieves each margin of safety?
+                          </p>
 
-                        <p style={{ color: C.muted, fontSize: "13px", lineHeight: "1.5", margin: 0 }}>
-                          {rec.rationale}
-                        </p>
-
-                        {/* Confidence bar */}
-                        <div style={{ marginTop: "16px", height: "4px", background: "rgba(200,169,106,0.1)", borderRadius: "2px" }}>
-                          <div style={{ height: "100%", width: `${rec.confidenceScore}%`, background: actionColor, borderRadius: "2px" }} />
+                          {intrinsicValue ? (
+                            <>
+                              <div style={{ marginBottom: "16px", padding: "12px 16px", background: "rgba(200,169,106,0.06)", borderRadius: "10px",
+                                display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ color: C.muted, fontSize: "13px" }}>Intrinsic Value</span>
+                                <span style={{ color: C.gold, fontSize: "13px", fontWeight: 600 }}>${intrinsicValue.toFixed(2)}</span>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                {targets.map(t => {
+                                  const isBelowCurrent = currentPrice > 0 && currentPrice <= t.price;
+                                  const isCurrentMOS   = currentPrice > 0
+                                    && intrinsicValue > 0
+                                    && Math.abs(((intrinsicValue - currentPrice) / intrinsicValue) * 100 - t.mos) < 5;
+                                  const barPct = currentPrice > 0 ? Math.min(100, (currentPrice / t.price) * 100) : 0;
+                                  return (
+                                    <div key={t.mos} style={{ padding: "12px 16px", borderRadius: "10px",
+                                      border: `1px solid ${isBelowCurrent ? "rgba(143,214,148,0.3)" : C.borderSubtle}`,
+                                      background: isBelowCurrent ? "rgba(143,214,148,0.04)" : "transparent" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                                        <span style={{ color: C.muted, fontSize: "12px" }}>{t.mos}% MOS</span>
+                                        <span style={{ color: isBelowCurrent ? C.green : C.text, fontSize: "14px", fontWeight: 600 }}>
+                                          ${t.price.toFixed(2)}
+                                          {isBelowCurrent && <span style={{ color: C.green, fontSize: "11px", marginLeft: "6px" }}>✓ met</span>}
+                                        </span>
+                                      </div>
+                                      <div style={{ height: "3px", background: "rgba(200,169,106,0.1)", borderRadius: "2px" }}>
+                                        <div style={{ height: "100%", width: `${barPct}%`,
+                                          background: isBelowCurrent ? C.green : C.gold, borderRadius: "2px", transition: "width 0.3s" }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {currentPrice > 0 && (
+                                <p style={{ color: C.muted, fontSize: "12px", marginTop: "14px" }}>
+                                  Current price: <span style={{ color: C.text }}>${currentPrice.toFixed(2)}</span>
+                                  {intrinsicValue > currentPrice
+                                    ? <span style={{ color: C.green }}> · {(((intrinsicValue - currentPrice) / intrinsicValue) * 100).toFixed(1)}% MOS</span>
+                                    : <span style={{ color: C.red }}> · {(((currentPrice - intrinsicValue) / intrinsicValue) * 100).toFixed(1)}% above IV</span>
+                                  }
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p style={{ color: C.muted, fontSize: "13px" }}>Run a valuation scenario to see entry price targets.</p>
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
+                    </>
+                }
+              </section>
+            );
+          })()}
+
+
+          {/* Model Assumptions */}
+          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+            <div style={{ marginBottom: "24px" }}>
+              <p style={labelStyle}>Valuation Models</p>
+              <h3 style={{ fontSize: "24px", margin: "8px 0 4px" }}>Assumptions & Inputs</h3>
+              <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>
+                Latest scenario per model. ⚠️ flags inputs that differ from current synced data by more than 10%.
+              </p>
+            </div>
+
+            {scenarios.length === 0
+              ? <p style={{ color: C.muted }}>No saved scenarios yet. Run a valuation to get started.</p>
+              : <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
+                    <thead>
+                      <tr style={{ color: C.muted, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "left" }}>
+                        {["Model", "Case", "Price", "EPS", "FCF/sh", "Growth", "Discount", "Terminal", "IV", "MOS", "Updated"].map(h => (
+                          <th key={h} style={{ paddingBottom: "12px", paddingRight: "14px", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.values(latestByModel).map((s: any) => {
+                        const mos = Number(s.marginOfSafetyPercent);
+                        const mosColor = mos >= 20 ? C.green : mos >= 0 ? C.gold : C.red;
+
+                        // Staleness checks — compare stored inputs vs current synced values
+                        const currentEps = detail?.eps != null ? Number(detail.eps) : null;
+                        const currentFcf = detail?.freeCashFlowPerShare != null ? Number(detail.freeCashFlowPerShare) : null;
+                        const storedEps  = s.earningsPerShare != null ? Number(s.earningsPerShare) : null;
+                        const storedFcf  = s.freeCashFlowPerShare != null ? Number(s.freeCashFlowPerShare) : null;
+                        const epsStale = currentEps != null && storedEps != null && Math.abs((currentEps - storedEps) / currentEps) > 0.10;
+                        const fcfStale = currentFcf != null && storedFcf != null && Math.abs((currentFcf - storedFcf) / currentFcf) > 0.10;
+
+                        const fmt = (v: any, suffix = "") => v != null ? `${Number(v).toFixed(2)}${suffix}` : "—";
+
+                        return (
+                          <tr key={s.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
+                            <td style={{ ...tableCellStyle, fontWeight: 600 }}>
+                              {(MODEL_LABELS as any)[s.modelType] ?? s.modelType}
+                            </td>
+                            <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                              {s.caseType ?? "—"}
+                            </td>
+                            <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                              {s.currentPrice != null ? `$${Number(s.currentPrice).toFixed(2)}` : "—"}
+                            </td>
+                            <td style={{ ...tableCellStyle, fontSize: "12px" }}>
+                              {storedEps != null ? (
+                                <span title={epsStale ? `Current: $${currentEps?.toFixed(2)}` : undefined}>
+                                  ${storedEps.toFixed(2)}{epsStale ? " ⚠️" : ""}
+                                </span>
+                              ) : "—"}
+                            </td>
+                            <td style={{ ...tableCellStyle, fontSize: "12px" }}>
+                              {storedFcf != null ? (
+                                <span title={fcfStale ? `Current: $${currentFcf?.toFixed(2)}` : undefined}>
+                                  ${storedFcf.toFixed(2)}{fcfStale ? " ⚠️" : ""}
+                                </span>
+                              ) : "—"}
+                            </td>
+                            <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                              {fmt(s.growthRatePercent, "%")}
+                            </td>
+                            <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                              {fmt(s.discountRatePercent, "%")}
+                            </td>
+                            <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                              {s.terminalGrowthRatePercent != null
+                                ? `${Number(s.terminalGrowthRatePercent).toFixed(1)}% g`
+                                : s.terminalMultiple != null
+                                  ? `${s.terminalMultiple}x`
+                                  : "—"}
+                            </td>
+                            <td style={{ ...tableCellStyle, fontWeight: 600 }}>
+                              ${Number(s.intrinsicValue).toFixed(2)}
+                            </td>
+                            <td style={{ ...tableCellStyle, color: mosColor, fontWeight: 600 }}>
+                              {mos >= 0 ? "+" : ""}{mos.toFixed(1)}%
+                            </td>
+                            <td style={{ ...tableCellStyle, color: C.muted, fontSize: "11px", whiteSpace: "nowrap" }}>
+                              {new Date(s.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
             }
           </section>
 
-          {/* Valuation History */}
-          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <p style={labelStyle}>Valuation History</p>
-            <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Intrinsic Value Over Time</h3>
-            {valTrendData.length === 0
-              ? <p style={{ color: C.muted }}>No saved scenarios yet.</p>
-              : <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={valTrendData}>
-                    <CartesianGrid stroke="rgba(200,169,106,0.08)" vertical={false} />
-                    <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 11 }} />
-                    <YAxis stroke={C.muted} tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
-                    <Tooltip {...tooltipStyle} formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Intrinsic Value"]} />
-                    <Line type="monotone" dataKey="intrinsicValue" stroke={C.gold} strokeWidth={2} dot={{ r: 4, fill: C.gold }} />
-                  </LineChart>
-                </ResponsiveContainer>
-            }
-
-            {scenarios.length > 0 && (
-              <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "28px" }}>
-                <thead>
-                  <tr style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left" }}>
-                    {["Date","Model","Case","Intrinsic Value","MOS","Assumptions","Label"].map(h => (
-                      <th key={h} style={{ paddingBottom: "12px" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {scenarios.slice(0, 10).map((s: any) => (
-                    <tr key={s.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
-                      <td style={tableCellStyle}>{new Date(s.createdAt).toLocaleDateString()}</td>
-                      <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>{s.modelType}</td>
-                      <td style={tableCellStyle}>{s.caseType ?? "—"}</td>
-                      <td style={tableCellStyle}>${Number(s.intrinsicValue).toFixed(2)}</td>
-                      <td style={{ ...tableCellStyle, color: Number(s.marginOfSafetyPercent) >= 20 ? C.green : Number(s.marginOfSafetyPercent) >= 0 ? C.gold : C.red }}>
-                        {Number(s.marginOfSafetyPercent).toFixed(2)}%
-                      </td>
-                      <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
-                        g={s.growthRatePercent}% d={s.discountRatePercent}%{s.terminalGrowthRatePercent != null ? ` gT=${s.terminalGrowthRatePercent}%` : s.terminalMultiple != null ? ` ${s.terminalMultiple}x` : ""}
-                      </td>
-                      <td style={{ ...tableCellStyle, fontSize: "12px",
-                        color: s.valuationLabel === "UNDERVALUED" ? C.green : s.valuationLabel === "OVERVALUED" ? C.red : C.gold }}>
-                        {s.valuationLabel}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-
           {/* Asset Ledger */}
-          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <p style={labelStyle}>Asset Ledger</p>
-            <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>{symbol} Transactions</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left" }}>
-                  {["Date","Type","Quantity","Price","Fees","Realized Gain"].map(h => (
-                    <th key={h} style={{ paddingBottom: "12px" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {assetTx.length === 0
-                  ? <tr><td colSpan={6} style={{ padding: "20px 0", color: C.muted }}>No transactions.</td></tr>
-                  : assetTx.map((tx: any) => (
-                    <tr key={tx.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
-                      <td style={tableCellStyle}>{tx.transactionDate}</td>
-                      <td style={tableCellStyle}><span style={pillStyle(tx.transactionType)}>{tx.transactionType}</span></td>
-                      <td style={tableCellStyle}>{Number(tx.quantity).toFixed(4)}</td>
-                      <td style={tableCellStyle}>${Number(tx.pricePerUnit).toFixed(2)}</td>
-                      <td style={tableCellStyle}>${Number(tx.fees).toFixed(2)}</td>
-                      <td style={{ ...tableCellStyle, color: Number(tx.realizedGain) >= 0 ? C.green : C.red }}>
-                        ${Number(tx.realizedGain).toFixed(2)}
-                      </td>
+          {(() => {
+            const isBuy  = (tx: any) => tx.transactionType === "BUY"  || tx.transactionType === "CDIV" || tx.transactionType === "DEPOSIT";
+            const isSell = (tx: any) => tx.transactionType === "SELL" || tx.transactionType === "WITHDRAWAL";
+
+            const totalRealizedGain = assetTx
+              .filter(isSell)
+              .reduce((sum: number, tx: any) => sum + Number(tx.realizedGain ?? 0), 0);
+            const totalFees = assetTx
+              .reduce((sum: number, tx: any) => sum + Number(tx.fees ?? 0), 0);
+            const hasAnyFees = totalFees > 0;
+
+            const filteredTx = assetTx.filter((tx: any) => {
+              if (txFilter === "buy")  return isBuy(tx);
+              if (txFilter === "sell") return isSell(tx);
+              return true;
+            });
+
+            return (
+              <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "20px" }}>
+                  <div>
+                    <p style={labelStyle}>Asset Ledger</p>
+                    <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>{symbol} Transactions</h3>
+                  </div>
+                  {/* Buy / All / Sell toggle */}
+                  <div style={{ display: "flex", gap: "4px" }}>
+                    {(["all", "buy", "sell"] as const).map(f => (
+                      <button key={f} onClick={() => setTxFilter(f)} style={{
+                        background: txFilter === f ? C.gold : "transparent",
+                        color: txFilter === f ? "#000" : C.muted,
+                        border: `1px solid ${txFilter === f ? C.gold : C.border}`,
+                        borderRadius: "8px", padding: "4px 14px", fontSize: "12px",
+                        fontWeight: txFilter === f ? 700 : 400, cursor: "pointer",
+                        textTransform: "capitalize",
+                      }}>{f === "all" ? "All" : f === "buy" ? "Buys" : "Sells"}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Summary chips */}
+                <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+                  <div style={{ padding: "8px 18px", borderRadius: "999px", fontSize: "13px",
+                    border: `1px solid ${totalRealizedGain >= 0 ? "rgba(143,214,148,0.3)" : "rgba(224,108,117,0.3)"}`,
+                    background: totalRealizedGain >= 0 ? "rgba(143,214,148,0.06)" : "rgba(224,108,117,0.06)",
+                    color: totalRealizedGain >= 0 ? C.green : C.red }}>
+                    Realized Gain&nbsp;&nbsp;
+                    <strong>{totalRealizedGain >= 0 ? "+" : ""}${totalRealizedGain.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  </div>
+                  {hasAnyFees && (
+                    <div style={{ padding: "8px 18px", borderRadius: "999px", fontSize: "13px",
+                      border: `1px solid ${C.borderSubtle}`, color: C.muted }}>
+                      Total Fees&nbsp;&nbsp;
+                      <strong style={{ color: C.text }}>${totalFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left" }}>
+                      {["Date", "Type", "Quantity", "Price", ...(hasAnyFees ? ["Fees"] : []), "Realized Gain"].map(h => (
+                        <th key={h} style={{ paddingBottom: "12px", paddingRight: "16px" }}>{h}</th>
+                      ))}
                     </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </section>
+                  </thead>
+                  <tbody>
+                    {filteredTx.length === 0
+                      ? <tr><td colSpan={hasAnyFees ? 6 : 5} style={{ padding: "20px 0", color: C.muted }}>No transactions.</td></tr>
+                      : filteredTx.map((tx: any) => {
+                          const sell = isSell(tx);
+                          const gain = Number(tx.realizedGain ?? 0);
+                          return (
+                            <tr key={tx.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
+                              <td style={tableCellStyle}>{tx.transactionDate}</td>
+                              <td style={tableCellStyle}><span style={pillStyle(tx.transactionType)}>{tx.transactionType}</span></td>
+                              <td style={tableCellStyle}>{Number(tx.quantity).toFixed(4)}</td>
+                              <td style={tableCellStyle}>${Number(tx.pricePerUnit).toFixed(2)}</td>
+                              {hasAnyFees && <td style={{ ...tableCellStyle, color: C.muted }}>${Number(tx.fees).toFixed(2)}</td>}
+                              <td style={{ ...tableCellStyle, color: sell ? (gain >= 0 ? C.green : C.red) : C.muted }}>
+                                {sell ? `${gain >= 0 ? "+" : ""}$${gain.toFixed(2)}` : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })
+                    }
+                  </tbody>
+                </table>
+              </section>
+            );
+          })()}
 
           {/* Tax Lots */}
-          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <p style={labelStyle}>Tax Lots</p>
-            <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Open & Closed Lots</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left" }}>
-                  {["Acquired","Purchased","Remaining","Cost/Share","Lot Cost","Status"].map(h => (
-                    <th key={h} style={{ paddingBottom: "12px" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {taxLots.length === 0
-                  ? <tr><td colSpan={6} style={{ padding: "20px 0", color: C.muted }}>No tax lots.</td></tr>
-                  : taxLots.map((lot: any) => (
-                    <tr key={lot.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
-                      <td style={tableCellStyle}>{lot.acquisitionDate}</td>
-                      <td style={tableCellStyle}>{Number(lot.quantityPurchased).toFixed(4)}</td>
-                      <td style={tableCellStyle}>{Number(lot.quantityRemaining).toFixed(4)}</td>
-                      <td style={tableCellStyle}>${Number(lot.costBasisPerUnit).toFixed(2)}</td>
-                      <td style={tableCellStyle}>${Number(lot.totalCostBasis).toFixed(2)}</td>
-                      <td style={tableCellStyle}>
-                        <span style={{ padding: "4px 12px", borderRadius: "999px", fontSize: "11px",
-                          background: lot.closed ? "rgba(224,108,117,0.12)" : "rgba(143,214,148,0.12)",
-                          color: lot.closed ? C.red : C.green }}>
-                          {lot.closed ? "CLOSED" : "OPEN"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </section>
+          {(() => {
+            const LOT_COLS = [
+              { label: "Acquired",   key: "acquisitionDate",   numeric: false },
+              { label: "Purchased",  key: "quantityPurchased", numeric: true  },
+              { label: "Remaining",  key: "quantityRemaining", numeric: true  },
+              { label: "Cost/Share", key: "costBasisPerUnit",  numeric: true  },
+              { label: "Lot Cost",   key: "totalCostBasis",    numeric: true  },
+              { label: "Status",     key: "closed",            numeric: false },
+            ];
 
-          {/* FIFO Allocations */}
+            const sortedLots = [...taxLots].sort((a: any, b: any) => {
+              const { col, dir } = lotSort;
+              let av = a[col], bv = b[col];
+              if (col === "acquisitionDate") {
+                av = new Date(av).getTime(); bv = new Date(bv).getTime();
+              } else if (col === "closed") {
+                av = av ? 1 : 0; bv = bv ? 1 : 0;
+              } else {
+                av = Number(av); bv = Number(bv);
+              }
+              return dir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+            });
+
+            const toggleSort = (key: string) => {
+              setLotSort(prev => prev.col === key
+                ? { col: key, dir: prev.dir === "asc" ? "desc" : "asc" }
+                : { col: key, dir: "asc" });
+            };
+
+            return (
+              <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+                <p style={labelStyle}>Tax Lots</p>
+                <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Open & Closed Lots</h3>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left" }}>
+                      {LOT_COLS.map(({ label, key }) => {
+                        const active = lotSort.col === key;
+                        return (
+                          <th key={key} onClick={() => toggleSort(key)}
+                            style={{ paddingBottom: "12px", paddingRight: "16px", cursor: "pointer",
+                              color: active ? C.gold : C.muted, userSelect: "none", whiteSpace: "nowrap" }}>
+                            {label} {active ? (lotSort.dir === "asc" ? "↑" : "↓") : <span style={{ opacity: 0.3 }}>↕</span>}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedLots.length === 0
+                      ? <tr><td colSpan={6} style={{ padding: "20px 0", color: C.muted }}>No tax lots.</td></tr>
+                      : sortedLots.map((lot: any) => (
+                          <tr key={lot.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
+                            <td style={tableCellStyle}>{lot.acquisitionDate}</td>
+                            <td style={tableCellStyle}>{Number(lot.quantityPurchased).toFixed(4)}</td>
+                            <td style={tableCellStyle}>{Number(lot.quantityRemaining).toFixed(4)}</td>
+                            <td style={tableCellStyle}>${Number(lot.costBasisPerUnit).toFixed(2)}</td>
+                            <td style={tableCellStyle}>${Number(lot.totalCostBasis).toFixed(2)}</td>
+                            <td style={tableCellStyle}>
+                              <span style={{ padding: "4px 12px", borderRadius: "999px", fontSize: "11px",
+                                background: lot.closed ? "rgba(224,108,117,0.12)" : "rgba(143,214,148,0.12)",
+                                color: lot.closed ? C.red : C.green }}>
+                                {lot.closed ? "CLOSED" : "OPEN"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                    }
+                  </tbody>
+                </table>
+              </section>
+            );
+          })()}
+
+          {/* FIFO Allocations — hidden from UI, data kept in DB for gain calculations
           <section style={sectionStyle}>
             <p style={labelStyle}>Realized Gain Audit</p>
             <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Tax Lot Allocations</h3>
@@ -1344,6 +1760,7 @@ export default function Research() {
               </tbody>
             </table>
           </section>
+          */}
         </>
       )}
     </div>

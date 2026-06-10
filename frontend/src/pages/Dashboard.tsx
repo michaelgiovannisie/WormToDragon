@@ -16,10 +16,13 @@ export default function Dashboard() {
   const [snapshots, setSnapshots]       = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [chartRange, setChartRange]     = useState("1y");
+  const [benchmark, setBenchmark]       = useState("SPY");
+  const [benchmarkInput, setBenchmarkInput] = useState("SPY");
+  const [benchmarkPrices, setBenchmarkPrices] = useState<any[]>([]);
 
   const RANGES = ["1w","1m","3m","ytd","1y","all"];
 
-  const loadData = (range = chartRange) => {
+  const loadData = (range = chartRange, bench = benchmark) => {
     fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`)
       .then(r => r.json()).then(setSummary).catch(console.error);
     fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`)
@@ -28,11 +31,24 @@ export default function Dashboard() {
       .then(r => r.json()).then(setSnapshots).catch(console.error);
     fetch(`${API}/transactions/account/${ACCOUNT_ID}`)
       .then(r => r.json()).then(setTransactions).catch(console.error);
+    if (bench !== "none") {
+      fetch(`${API}/historical-prices/${bench}`)
+        .then(r => r.json()).then(d => setBenchmarkPrices(Array.isArray(d) ? d : []))
+        .catch(() => setBenchmarkPrices([]));
+    } else {
+      setBenchmarkPrices([]);
+    }
   };
 
+  useEffect(() => { loadData(); }, []);
+
+  // Re-fetch benchmark when selection changes
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!benchmark || benchmark === "none") { setBenchmarkPrices([]); return; }
+    fetch(`${API}/historical-prices/${benchmark.toUpperCase()}`)
+      .then(r => r.json()).then(d => setBenchmarkPrices(Array.isArray(d) ? d : []))
+      .catch(() => setBenchmarkPrices([]));
+  }, [benchmark]);
 
   const handleRangeChange = (range: string) => {
     setChartRange(range);
@@ -42,6 +58,51 @@ export default function Dashboard() {
   const trendData = snapshots.length > 0
     ? snapshots.map((s: any) => ({ date: s.date, value: Number(s.value ?? 0) }))
     : [];
+
+  // Normalized benchmark overlay — both series indexed to 100 at first snapshot date
+  const benchmarkChartData = (() => {
+    if (trendData.length === 0 || benchmarkPrices.length === 0) return trendData;
+
+    // Build a date→close map for the benchmark
+    const bMap: Record<string, number> = {};
+    for (const p of benchmarkPrices) {
+      bMap[p.priceDate] = Number(p.close);
+    }
+
+    // Find first benchmark close on or after the first snapshot date
+    const firstDate = trendData[0].date;
+    const sortedBDates = Object.keys(bMap).sort();
+    const firstBDate = sortedBDates.find(d => d >= firstDate);
+    if (!firstBDate) return trendData;
+
+    const firstPortfolioValue = trendData[0].value;
+    const firstBenchmarkClose = bMap[firstBDate];
+    if (!firstPortfolioValue || !firstBenchmarkClose) return trendData;
+
+    return trendData.map(pt => {
+      // Find nearest benchmark close on or before this date
+      const nearestDate = sortedBDates.filter(d => d <= pt.date).slice(-1)[0];
+      const bClose = nearestDate ? bMap[nearestDate] : null;
+      const benchmarkNorm = bClose != null
+        ? (bClose / firstBenchmarkClose) * firstPortfolioValue
+        : null;
+      return { ...pt, benchmark: benchmarkNorm };
+    });
+  })();
+
+  // Alpha stats
+  const alphaStats = (() => {
+    const pts = benchmarkChartData.filter((p: any) => p.benchmark != null);
+    if (pts.length < 2 || trendData.length < 2) return null;
+    const firstValue     = trendData[0].value;
+    const lastValue      = trendData[trendData.length - 1].value;
+    const firstBench     = pts[0].benchmark as number;
+    const lastBench      = pts[pts.length - 1].benchmark as number;
+    const portfolioRet   = ((lastValue - firstValue) / firstValue) * 100;
+    const benchmarkRet   = ((lastBench - firstBench) / firstBench) * 100;
+    const alpha          = portfolioRet - benchmarkRet;
+    return { portfolioRet, benchmarkRet, alpha };
+  })();
 
   const recentTx = [...transactions]
     .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
@@ -97,7 +158,7 @@ export default function Dashboard() {
               <p style={labelStyle}>Portfolio Trend</p>
               <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Value Over Time</h3>
             </div>
-            <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+            <div style={{ display: "flex", gap: "4px", marginTop: "4px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               {RANGES.map(r => (
                 <button key={r} onClick={() => handleRangeChange(r)} style={{
                   background: chartRange === r ? C.gold : "transparent",
@@ -110,15 +171,78 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+
+          {/* Benchmark selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+            <span style={{ color: C.muted, fontSize: "12px" }}>vs</span>
+            <input
+              value={benchmarkInput}
+              onChange={e => setBenchmarkInput(e.target.value.toUpperCase())}
+              onKeyDown={e => { if (e.key === "Enter") setBenchmark(benchmarkInput || "none"); }}
+              placeholder="SPY, QQQ, MSFT…"
+              style={{
+                background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`,
+                borderRadius: "8px", color: C.text, padding: "3px 10px", fontSize: "12px",
+                width: "110px", outline: "none",
+              }}
+            />
+            <button onClick={() => setBenchmark(benchmarkInput || "none")} style={{
+              background: "rgba(200,169,106,0.12)", color: C.gold,
+              border: `1px solid ${C.gold}`, borderRadius: "8px",
+              padding: "3px 10px", fontSize: "12px", cursor: "pointer",
+            }}>Apply</button>
+            {benchmark !== "none" && (
+              <button onClick={() => { setBenchmark("none"); setBenchmarkInput(""); }} style={{
+                background: "transparent", color: C.muted,
+                border: `1px solid ${C.border}`, borderRadius: "8px",
+                padding: "3px 10px", fontSize: "12px", cursor: "pointer",
+              }}>Clear</button>
+            )}
+            {alphaStats && (
+              <span style={{
+                marginLeft: "8px", fontSize: "12px", padding: "3px 12px",
+                borderRadius: "999px",
+                background: alphaStats.alpha >= 0 ? "rgba(143,214,148,0.1)" : "rgba(224,108,117,0.1)",
+                color: alphaStats.alpha >= 0 ? C.green : C.red,
+                border: `1px solid ${alphaStats.alpha >= 0 ? "rgba(143,214,148,0.3)" : "rgba(224,108,117,0.3)"}`,
+              }}>
+                {alphaStats.alpha >= 0 ? "+" : ""}{alphaStats.alpha.toFixed(2)}% vs {benchmark}
+              </span>
+            )}
+          </div>
+
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trendData}>
+            <LineChart data={benchmarkChartData}>
               <CartesianGrid stroke="rgba(200,169,106,0.08)" vertical={false} />
-              <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 12 }} />
+              <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 12 }} interval="preserveStartEnd" minTickGap={60} />
               <YAxis stroke={C.muted} tick={{ fontSize: 12 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip {...tooltipStyle} formatter={(v: any) => [`$${Number(v).toLocaleString()}`, "Value"]} />
-              <Line type="monotone" dataKey="value" stroke={C.green} strokeWidth={2} dot={false} />
+              <Tooltip {...tooltipStyle} formatter={(v: any, name: string) => [
+                `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+                name === "benchmark" ? benchmark : "Portfolio"
+              ]} />
+              <Line type="monotone" dataKey="value" stroke={C.green} strokeWidth={2} dot={false} name="Portfolio" />
+              {benchmark !== "none" && (
+                <Line type="monotone" dataKey="benchmark" stroke="#60a5fa" strokeWidth={1.5}
+                  strokeDasharray="6 3" dot={false} name="benchmark" connectNulls />
+              )}
             </LineChart>
           </ResponsiveContainer>
+
+          {/* Alpha detail row */}
+          {alphaStats && (
+            <div style={{ display: "flex", gap: "24px", marginTop: "16px", paddingTop: "16px", borderTop: `1px solid ${C.borderSubtle}` }}>
+              {[
+                { label: "Your Return",       value: `${alphaStats.portfolioRet >= 0 ? "+" : ""}${alphaStats.portfolioRet.toFixed(2)}%`, color: alphaStats.portfolioRet >= 0 ? C.green : C.red },
+                { label: `${benchmark} Return`, value: `${alphaStats.benchmarkRet >= 0 ? "+" : ""}${alphaStats.benchmarkRet.toFixed(2)}%`, color: "#60a5fa" },
+                { label: "Alpha",             value: `${alphaStats.alpha >= 0 ? "+" : ""}${alphaStats.alpha.toFixed(2)}%`, color: alphaStats.alpha >= 0 ? C.green : C.red },
+              ].map(({ label, value, color }) => (
+                <div key={label}>
+                  <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</p>
+                  <p style={{ color, fontSize: "18px", fontWeight: 600, margin: 0 }}>{value}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section style={sectionStyle}>

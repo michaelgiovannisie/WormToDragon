@@ -45,6 +45,10 @@ public class ValuationService {
         return scenarioRepository.findBySymbolOrderByCreatedAtDesc(symbol);
     }
 
+    public void deleteScenario(java.util.UUID id) {
+        scenarioRepository.deleteById(id);
+    }
+
     public ValuationResponse calculateIntrinsicValue(ValuationRequest request) {
         ValuationResponse response = calculate(request);
         persistScenario(request, response);

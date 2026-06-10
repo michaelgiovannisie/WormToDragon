@@ -3,8 +3,6 @@ package com.conviction.dca.strategy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import org.springframework.stereotype.Component;
-
 import com.conviction.dca.dto.DCAInput;
 import com.conviction.dca.dto.DCARecommendation;
 
@@ -18,7 +16,6 @@ import com.conviction.dca.dto.DCARecommendation;
  *   MOS >= 25%  → Full lump sum, confidence 75
  *   MOS < 25%   → HOLD — not a meaningful dip for this strategy
  */
-@Component
 public class AggressiveGrowthDCAStrategy implements DCARecommendationStrategy {
 
     @Override
