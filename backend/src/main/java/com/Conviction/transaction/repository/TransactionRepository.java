@@ -25,6 +25,7 @@ public interface TransactionRepository
         JOIN FETCH t.account a
         JOIN FETCH t.asset
         WHERE a.portfolio.id = :portfolioId
+        ORDER BY t.transactionDate ASC, t.createdAt ASC
         """)
     List<Transaction> findByAccountPortfolioId(@Param("portfolioId") UUID portfolioId);
 

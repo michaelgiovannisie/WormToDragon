@@ -270,6 +270,15 @@ public class HoldingService {
         List<Holding> holdings =
         holdingRepository.findActiveByPortfolioIdWithAssetAndAccount(portfolioId);
 
+        // Refresh market prices from historical_price table before computing values
+        holdings.stream()
+                .map(h -> h.getAsset().getSymbol())
+                .distinct()
+                .forEach(this::refreshPricesForSymbol);
+
+        // Re-fetch after refresh so we see updated marketValue
+        holdings = holdingRepository.findActiveByPortfolioIdWithAssetAndAccount(portfolioId);
+
         Map<UUID, List<Holding>> holdingsByAsset = holdings.stream()
                 .collect(Collectors.groupingBy(holding -> holding.getAsset().getId()));
 

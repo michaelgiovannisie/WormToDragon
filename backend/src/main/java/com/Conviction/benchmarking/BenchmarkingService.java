@@ -45,7 +45,9 @@ public class BenchmarkingService {
             if (t.getTransactionType() == TransactionType.BUY) {
                 quantities.put(symbol, current.add(t.getQuantity()));
             } else if (t.getTransactionType() == TransactionType.SELL) {
-                quantities.put(symbol, current.subtract(t.getQuantity()));
+                BigDecimal afterSell = current.subtract(t.getQuantity());
+                // Clamp to zero — handles pre/post stock-split quantity mismatches
+                quantities.put(symbol, afterSell.max(BigDecimal.ZERO));
             }
         }
 
