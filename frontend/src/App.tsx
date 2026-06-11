@@ -6,6 +6,7 @@ import Research   from "./pages/Research";
 import Tax        from "./pages/Tax";
 import Import        from "./pages/Import";
 import Benchmarking from "./pages/Benchmarking";
+import Screener     from "./pages/Screener";
 
 import { C }      from "./theme";
 
@@ -22,7 +23,7 @@ export default function App() {
             <Route path="/tax"       element={<Tax />}       />
             <Route path="/import"         element={<Import />}        />
             <Route path="/benchmarking"   element={<Benchmarking />}  />
-
+            <Route path="/screener"       element={<Screener />}      />
           </Routes>
         </main>
       </div>

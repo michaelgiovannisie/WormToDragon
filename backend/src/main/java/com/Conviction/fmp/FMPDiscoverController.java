@@ -88,6 +88,125 @@ public class FMPDiscoverController {
     }
 
     /**
+     * Enriched screener — all FMP screener params + ratios-ttm + financial-scores per symbol.
+     * FMP-level filters (fast) plus post-filters on enriched fundamentals.
+     */
+    @SuppressWarnings("unchecked")
+    @GetMapping("/screener/full")
+    public List<FMPEnrichedScreenerResult> enrichedScreener(
+            // ── FMP screener params ──
+            @RequestParam(required = false) String exchange,
+            @RequestParam(required = false) String sector,
+            @RequestParam(required = false) String industry,
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) Long   marketCapMoreThan,
+            @RequestParam(required = false) Long   marketCapLowerThan,
+            @RequestParam(required = false) Double priceMoreThan,
+            @RequestParam(required = false) Double priceLowerThan,
+            @RequestParam(required = false) Double betaMoreThan,
+            @RequestParam(required = false) Double betaLowerThan,
+            @RequestParam(required = false) Double volumeMoreThan,
+            @RequestParam(required = false) Double volumeLowerThan,
+            @RequestParam(required = false) Double dividendMoreThan,
+            @RequestParam(required = false) Double dividendLowerThan,
+            @RequestParam(required = false) Boolean isEtf,
+            @RequestParam(required = false) Boolean isFund,
+            @RequestParam(required = false) Boolean isActivelyTrading,
+            @RequestParam(required = false) Boolean includeAllShareClasses,
+            // ── enrichment post-filters ──
+            @RequestParam(required = false) Double maxPeRatio,
+            @RequestParam(required = false) Double minRoe,             // decimal, e.g. 0.15 = 15%
+            @RequestParam(required = false) Double minDividendYield,   // decimal, e.g. 0.02 = 2%
+            @RequestParam(required = false) Integer minPiotroski,
+            @RequestParam(defaultValue = "50") int limit
+    ) {
+        // 1. Build FMP screener params — fetch 2× limit so post-filtering still yields enough
+        var params = new java.util.ArrayList<String>();
+        if (exchange              != null) { params.add("exchange");              params.add(exchange); }
+        if (sector                != null) { params.add("sector");                params.add(sector); }
+        if (industry              != null) { params.add("industry");              params.add(industry); }
+        if (country               != null) { params.add("country");               params.add(country); }
+        if (marketCapMoreThan     != null) { params.add("marketCapMoreThan");     params.add(marketCapMoreThan.toString()); }
+        if (marketCapLowerThan    != null) { params.add("marketCapLowerThan");    params.add(marketCapLowerThan.toString()); }
+        if (priceMoreThan         != null) { params.add("priceMoreThan");         params.add(priceMoreThan.toString()); }
+        if (priceLowerThan        != null) { params.add("priceLowerThan");        params.add(priceLowerThan.toString()); }
+        if (betaMoreThan          != null) { params.add("betaMoreThan");          params.add(betaMoreThan.toString()); }
+        if (betaLowerThan         != null) { params.add("betaLowerThan");         params.add(betaLowerThan.toString()); }
+        if (volumeMoreThan        != null) { params.add("volumeMoreThan");        params.add(volumeMoreThan.toString()); }
+        if (volumeLowerThan       != null) { params.add("volumeLowerThan");       params.add(volumeLowerThan.toString()); }
+        if (dividendMoreThan      != null) { params.add("dividendMoreThan");      params.add(dividendMoreThan.toString()); }
+        if (dividendLowerThan     != null) { params.add("dividendLowerThan");     params.add(dividendLowerThan.toString()); }
+        // Booleans — only send if explicitly set, otherwise let FMP use its defaults
+        params.add("isEtf");            params.add(isEtf != null ? isEtf.toString() : "false");
+        params.add("isFund");           params.add(isFund != null ? isFund.toString() : "false");
+        params.add("isActivelyTrading"); params.add(isActivelyTrading != null ? isActivelyTrading.toString() : "true");
+        if (includeAllShareClasses != null) { params.add("includeAllShareClasses"); params.add(includeAllShareClasses.toString()); }
+        params.add("limit");             params.add(String.valueOf(Math.min(limit * 2, 200)));
+
+        List<Map<String, Object>> raw = fmp.get("/company-screener", List.class, params.toArray(new String[0]));
+        if (raw == null || raw.isEmpty()) return List.of();
+
+        // 2. Enrich each symbol in parallel with ratios-ttm + financial-scores
+        List<FMPEnrichedScreenerResult> enriched = raw.parallelStream()
+                .map(this::enrich)
+                .filter(r -> r != null)
+                .collect(java.util.stream.Collectors.toList());
+
+        // 3. Post-filter on fundamentals
+        return enriched.stream()
+                .filter(r -> maxPeRatio      == null || (r.peRatio()       != null && r.peRatio().doubleValue()       > 0 && r.peRatio().doubleValue()       <= maxPeRatio))
+                .filter(r -> minRoe          == null || (r.roe()           != null && r.roe().doubleValue()           >= minRoe))
+                .filter(r -> minDividendYield == null || (r.dividendYield() != null && r.dividendYield().doubleValue() >= minDividendYield))
+                .filter(r -> minPiotroski    == null || (r.piotroskiScore() != null && r.piotroskiScore()             >= minPiotroski))
+                .limit(limit)
+                .toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private FMPEnrichedScreenerResult enrich(Map<String, Object> r) {
+        String symbol = str(r, "symbol");
+        if (symbol == null) return null;
+
+        // ratios-ttm — P/E, P/B, ROE, net margin, dividend yield, debt/equity
+        BigDecimal peRatio = null, pbRatio = null, roe = null,
+                   netMargin = null, dividendYield = null, debtEquity = null;
+        List<Map<String, Object>> ratios = fmp.get("/ratios-ttm", List.class, "symbol", symbol);
+        if (ratios != null && !ratios.isEmpty()) {
+            Map<String, Object> m = ratios.get(0);
+            peRatio       = toBD(m.get("peRatioTTM"));
+            pbRatio       = toBD(m.get("pbRatioTTM"));
+            roe           = toBD(m.get("returnOnEquityTTM"));
+            netMargin     = toBD(m.get("netProfitMarginTTM"));
+            dividendYield = toBD(m.get("dividendYieldTTM"));
+            debtEquity    = toBD(m.get("debtToEquityTTM"));
+        }
+
+        // financial-scores — Piotroski, Altman Z
+        Integer piotroski = null;
+        BigDecimal altmanZ = null;
+        List<Map<String, Object>> scores = fmp.get("/financial-scores", List.class, "symbol", symbol);
+        if (scores != null && !scores.isEmpty()) {
+            Map<String, Object> s = scores.get(0);
+            Object ps = s.get("piotroskiScore");
+            if (ps != null) { try { piotroski = Integer.parseInt(ps.toString()); } catch (Exception ignored) {} }
+            altmanZ = toBD(s.get("altmanZScore"));
+        }
+
+        return new FMPEnrichedScreenerResult(
+                symbol,
+                str(r, "companyName"),
+                str(r, "sector"),
+                str(r, "exchange"),
+                str(r, "country"),
+                toBD(r.get("marketCap")),
+                toBD(r.get("price")),
+                toBD(r.get("beta")),
+                peRatio, pbRatio, roe, netMargin, dividendYield, debtEquity,
+                piotroski, altmanZ
+        );
+    }
+
+    /**
      * Preview a symbol's FMP profile without adding to local DB.
      * Returns null fields for anything FMP doesn't return.
      */
@@ -198,4 +317,11 @@ public class FMPDiscoverController {
                                    String currency, String sector, String industry,
                                    BigDecimal marketCap, BigDecimal peRatio, BigDecimal price,
                                    boolean inLibrary) {}
+    public record FMPEnrichedScreenerResult(
+            String symbol, String name, String sector, String exchange, String country,
+            BigDecimal marketCap, BigDecimal price, BigDecimal beta,
+            BigDecimal peRatio, BigDecimal pbRatio, BigDecimal roe,
+            BigDecimal netMargin, BigDecimal dividendYield, BigDecimal debtEquity,
+            Integer piotroskiScore, BigDecimal altmanZScore
+    ) {}
 }
