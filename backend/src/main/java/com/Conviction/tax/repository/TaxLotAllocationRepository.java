@@ -54,4 +54,11 @@ public interface TaxLotAllocationRepository
             @Param("accountId") UUID accountId,
             @Param("assetId") UUID assetId
     );
+
+    @Modifying
+    @Query("""
+        DELETE FROM TaxLotAllocation allocation
+        WHERE allocation.taxLot.account.portfolio.id = :portfolioId
+        """)
+    void deleteByPortfolioId(@Param("portfolioId") UUID portfolioId);
 }

@@ -43,6 +43,16 @@ public interface TaxLotRepository extends JpaRepository<TaxLot, UUID> {
         """)
     Optional<LocalDate> findOldestOpenLotDate(@Param("symbol") String symbol);
 
+    @Query("""
+        SELECT lot FROM TaxLot lot
+        JOIN FETCH lot.account a
+        JOIN FETCH lot.asset
+        JOIN FETCH lot.buyTransaction
+        WHERE a.portfolio.id = :portfolioId
+        ORDER BY lot.acquisitionDate ASC, lot.createdAt ASC
+        """)
+    List<TaxLot> findByPortfolioId(@Param("portfolioId") UUID portfolioId);
+
     @Modifying
     @Query("""
         DELETE FROM TaxLot lot

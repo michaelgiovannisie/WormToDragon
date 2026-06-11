@@ -3,6 +3,7 @@ package com.conviction.tax.service;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -16,21 +17,25 @@ import com.conviction.tax.repository.TaxLotRepository;
 import com.conviction.tax.strategy.TaxStrategy;
 import com.conviction.transaction.entity.Transaction;
 import com.conviction.transaction.enums.TransactionType;
+import com.conviction.transaction.repository.TransactionRepository;
 
 @Service
 public class TaxLotService {
 
     private final TaxLotRepository taxLotRepository;
     private final TaxLotAllocationRepository allocationRepository;
+    private final TransactionRepository transactionRepository;
     private final Map<String, TaxStrategy> strategies;
 
     public TaxLotService(
             TaxLotRepository taxLotRepository,
             TaxLotAllocationRepository allocationRepository,
+            TransactionRepository transactionRepository,
             List<TaxStrategy> strategyList
     ) {
         this.taxLotRepository = taxLotRepository;
         this.allocationRepository = allocationRepository;
+        this.transactionRepository = transactionRepository;
         this.strategies = strategyList.stream()
                 .collect(Collectors.toMap(
                         TaxStrategy::getName,
@@ -101,6 +106,37 @@ public class TaxLotService {
         lot.setClosed(false);
 
         taxLotRepository.save(lot);
+    }
+
+    /**
+     * Wipe all allocations for the portfolio and re-run them in transaction-date
+     * order using the given strategy. Lot quantities and closed state are reset
+     * before replay so the result is identical to a fresh import.
+     */
+    @Transactional
+    public void rebuildAllocationsForPortfolio(UUID portfolioId, String strategyName) {
+        // 1. Delete every allocation that belongs to this portfolio
+        allocationRepository.deleteByPortfolioId(portfolioId);
+
+        // 2. Reset every lot back to its original state
+        List<TaxLot> lots = taxLotRepository.findByPortfolioId(portfolioId);
+        for (TaxLot lot : lots) {
+            lot.setClosed(false);
+            lot.setClosedDate(null);
+            lot.setQuantityRemaining(lot.getQuantityPurchased());
+            taxLotRepository.save(lot);
+        }
+
+        // 3. Re-allocate every SELL in chronological order (query is already ordered)
+        List<Transaction> sellTransactions = transactionRepository
+                .findByAccountPortfolioId(portfolioId)
+                .stream()
+                .filter(t -> t.getTransactionType() == TransactionType.SELL)
+                .toList();
+
+        for (Transaction t : sellTransactions) {
+            allocateSell(t, strategyName);
+        }
     }
 
     private void allocateSell(Transaction transaction, String strategyName) {

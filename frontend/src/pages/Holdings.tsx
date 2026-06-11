@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { API, PORTFOLIO_ID } from "../constants";
@@ -6,7 +6,81 @@ import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 import { HoldingsSyncWidget } from "../components/HoldingsSyncWidget";
 
-type SortKey = "symbol" | "marketValue" | "unrealizedGain" | "quantityHeld" | "averageCostBasis" | "dayChangePct";
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function fmt$(v: number): string {
+  const abs = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (v < 0 ? "-$" : "$") + abs;
+}
+
+type SortDir = "asc" | "desc";
+
+function useSortable<T>(
+  data: T[],
+  defaultKey: keyof T | null = null,
+  defaultDir: SortDir = "asc",
+  descFirstKeys: (keyof T)[] = [],
+) {
+  const [sortKey, setSortKey] = useState<keyof T | null>(defaultKey);
+  const [sortDir, setSortDir] = useState<SortDir>(defaultDir);
+
+  function toggle(key: keyof T) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(descFirstKeys.includes(key) ? "desc" : "asc"); }
+  }
+
+  const sorted = [...data].sort((a, b) => {
+    if (!sortKey) return 0;
+    const av = a[sortKey], bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  return { sorted, sortKey, sortDir, toggle };
+}
+
+function SortTh({ label, sortKey, activeSortKey, sortDir, onSort }: {
+  label: React.ReactNode;
+  sortKey: string;
+  activeSortKey: string | null;
+  sortDir: SortDir;
+  onSort: (k: string) => void;
+}) {
+  const active = activeSortKey === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      style={{
+        color: active ? C.gold : C.muted,
+        fontSize: "12px", textTransform: "uppercase" as const,
+        letterSpacing: "0.06em", textAlign: "center" as const,
+        paddingBottom: "12px", cursor: "pointer",
+        userSelect: "none" as const, whiteSpace: "normal" as const,
+        lineHeight: "1.3", verticalAlign: "bottom",
+      }}
+    >
+      {label}
+      <span style={{ marginLeft: "4px", opacity: active ? 1 : 0.3 }}>
+        {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </th>
+  );
+}
+
+function NoSortTh({ label }: { label: React.ReactNode }) {
+  return (
+    <th style={{
+      color: C.muted, fontSize: "12px", textTransform: "uppercase" as const,
+      letterSpacing: "0.06em", paddingBottom: "12px", textAlign: "center" as const,
+      whiteSpace: "normal" as const, lineHeight: "1.3", verticalAlign: "bottom",
+    }}>
+      {label}
+    </th>
+  );
+}
 
 function holdingPeriod(firstBuyDate: string | null): string {
   if (!firstBuyDate) return "—";
@@ -21,53 +95,82 @@ function holdingPeriod(firstBuyDate: string | null): string {
   return `${years}y ${rem}m`;
 }
 
+// ── component ──────────────────────────────────────────────────────────────
+
 export default function Holdings() {
   const navigate = useNavigate();
 
   // ── Holdings ──────────────────────────────────────────────
   const [holdings, setHoldings] = useState<any[]>([]);
   const [summary, setSummary]   = useState<any>(null);
-  const [sortKey, setSortKey]   = useState<SortKey>("symbol");
-  const [sortAsc, setSortAsc]   = useState(true);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`)
-      .then(r => r.json()).then(setHoldings).catch(console.error);
-    fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`)
-      .then(r => r.json()).then(setSummary).catch(console.error);
-  }, []);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(v => !v);
-    else { setSortKey(key); setSortAsc(false); }
+  const loadData = async () => {
+    setError(null);
+    try {
+      const [h, s] = await Promise.all([
+        fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+        fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      ]);
+      setHoldings(h);
+      setSummary(s);
+    } catch {
+      setError("Failed to load holdings. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const sorted = [...holdings].sort((a, b) => {
-    const av = typeof a[sortKey] === "string" ? a[sortKey] : Number(a[sortKey] ?? 0);
-    const bv = typeof b[sortKey] === "string" ? b[sortKey] : Number(b[sortKey] ?? 0);
-    if (av < bv) return sortAsc ? -1 : 1;
-    if (av > bv) return sortAsc ? 1 : -1;
-    return 0;
+  useEffect(() => { loadData(); }, []);
+
+  // Enrich each row with pre-computed numeric fields for sorting
+  const enrichedHoldings = holdings.map((h: any) => {
+    const marketValue = Number(h.marketValue ?? 0);
+    const costBasis   = Number(h.totalCostBasis ?? 0);
+    const returnPct   = costBasis > 0 ? (marketValue - costBasis) / costBasis * 100 : 0;
+    const sparkArr    = Array.isArray(h.sparkline) ? h.sparkline as number[] : [];
+    // Use spark's own first→last trend for color (not today's dayChange)
+    const sparkTrend  = sparkArr.length > 1 ? sparkArr[sparkArr.length - 1] - sparkArr[0] : Number(h.dayChange ?? 0);
+    return {
+      ...h,
+      _marketValue:    marketValue,
+      _unrealGain:     Number(h.unrealizedGain ?? 0),
+      _returnPct:      returnPct,
+      _dayChangePct:   Number(h.dayChangePct ?? 0),
+      _quantityHeld:   Number(h.quantityHeld ?? 0),
+      _avgCost:        Number(h.averageCostBasis ?? 0),
+      _costBasis:      costBasis,
+      _allocationPct:  Number(h.allocationPercent ?? 0),
+      _firstBuyDate:   h.firstBuyDate ?? null,
+      _sparkTrend:     sparkTrend,
+    };
   });
 
-  const totalReturn = summary?.totalCostBasis > 0
+  const { sorted, sortKey, sortDir, toggle } = useSortable(
+    enrichedHoldings,
+    "_marketValue",
+    "desc",
+    ["_marketValue", "_unrealGain", "_returnPct", "_dayChangePct", "_quantityHeld", "_costBasis", "_allocationPct"],
+  );
+
+  const thP = (key: string) => ({
+    sortKey: key,
+    activeSortKey: sortKey as string | null,
+    sortDir,
+    onSort: toggle as (k: string) => void,
+  });
+
+  const totalReturn = Number(summary?.totalCostBasis ?? 0) > 0
     ? ((Number(summary?.totalMarketValue) - Number(summary?.totalCostBasis)) / Number(summary?.totalCostBasis) * 100).toFixed(2)
     : "0.00";
 
   const summaryCards = [
-    { label: "Total Cost Basis",   value: `$${Number(summary?.totalCostBasis ?? 0).toLocaleString("en-US",{minimumFractionDigits:2})}` },
-    { label: "Total Market Value", value: `$${Number(summary?.totalMarketValue ?? 0).toLocaleString("en-US",{minimumFractionDigits:2})}` },
-    { label: "Unrealized Gain",    value: `$${Number(summary?.totalUnrealizedGain ?? 0).toLocaleString("en-US",{minimumFractionDigits:2})}`, color: Number(summary?.totalUnrealizedGain ?? 0) >= 0 ? C.green : C.red },
+    { label: "Total Cost Basis",   value: fmt$(Number(summary?.totalCostBasis ?? 0)) },
+    { label: "Total Market Value", value: fmt$(Number(summary?.totalMarketValue ?? 0)) },
+    { label: "Unrealized Gain",    value: fmt$(Number(summary?.totalUnrealizedGain ?? 0)), color: Number(summary?.totalUnrealizedGain ?? 0) >= 0 ? C.green : C.red },
     { label: "Total Return",       value: `${Number(totalReturn) >= 0 ? "+" : ""}${totalReturn}%`, color: Number(totalReturn) >= 0 ? C.green : C.red },
   ];
-
-  const th = (key: SortKey | null, _label: string): React.CSSProperties => ({
-    paddingBottom: "12px", cursor: key ? "pointer" : "default",
-    color: key && sortKey === key ? C.gold : C.muted,
-    fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em",
-    userSelect: "none", whiteSpace: "normal", lineHeight: "1.3", verticalAlign: "bottom", textAlign: "center",
-  });
-  const arrow = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
 
   // ── Watchlists ────────────────────────────────────────────
   const [watchlists, setWatchlists]       = useState<any[]>([]);
@@ -79,6 +182,7 @@ export default function Holdings() {
   const [addingSymbol, setAddingSymbol]   = useState<string | null>(null);
   const [renaming, setRenaming]           = useState<string | null>(null);
   const [renameVal, setRenameVal]         = useState("");
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const loadLists = () =>
     fetch(`${API}/watchlists?portfolioId=${PORTFOLIO_ID}`)
@@ -97,6 +201,18 @@ export default function Holdings() {
       .then(r => r.json()).then(setSearchResults).catch(console.error);
   }, [searchQuery]);
 
+  // Close search dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchResults([]);
+        setSearchQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   const createWatchlist = async () => {
     if (!newName.trim()) return;
     setCreating(true);
@@ -113,17 +229,19 @@ export default function Holdings() {
     } finally { setCreating(false); }
   };
 
-  const deleteWatchlist = async (id: string) => {
+  const deleteWatchlist = async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
     await fetch(`${API}/watchlists/${id}`, { method: "DELETE" });
     if (active?.id === id) setActive(null);
     await loadLists();
   };
 
   const saveRename = async (id: string) => {
+    if (!renameVal.trim()) { setRenaming(null); return; }
     await fetch(`${API}/watchlists/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: renameVal }),
+      body: JSON.stringify({ name: renameVal.trim() }),
     });
     setRenaming(null);
     await loadLists();
@@ -158,6 +276,8 @@ export default function Holdings() {
     borderRadius: "10px", padding: "10px 14px", fontSize: "14px", fontFamily: C.font,
   };
 
+  if (loading) return <p style={{ color: C.muted, fontFamily: C.font, padding: "40px" }}>Loading…</p>;
+
   return (
     <div style={{ color: C.text, fontFamily: C.font }}>
       <p style={labelStyle}>Portfolio</p>
@@ -165,10 +285,12 @@ export default function Holdings() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "40px", flexWrap: "wrap", gap: "12px" }}>
         <p style={{ color: C.muted, margin: 0 }}>All current positions across your account.</p>
         <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-          <HoldingsSyncWidget />
+          <HoldingsSyncWidget onComplete={loadData} />
           <Nasdaq100SyncWidget />
         </div>
       </div>
+
+      {error && <p style={{ color: C.red, marginBottom: "24px" }}>{error}</p>}
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "20px", marginBottom: "32px" }}>
@@ -189,28 +311,26 @@ export default function Holdings() {
 
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ textAlign: "center" }}>
-              <th style={th("symbol", "Symbol")}        onClick={() => toggleSort("symbol")}>Symbol{arrow("symbol")}</th>
-              <th style={th(null, "30d")}               >30D</th>
-              <th style={th("dayChangePct", "Day")}     onClick={() => toggleSort("dayChangePct")}>Day<br/>Chg{arrow("dayChangePct")}</th>
-              <th style={th("quantityHeld", "Qty")}     onClick={() => toggleSort("quantityHeld")}>Qty{arrow("quantityHeld")}</th>
-              <th style={th("averageCostBasis", "Avg")} onClick={() => toggleSort("averageCostBasis")}>Avg<br/>Cost{arrow("averageCostBasis")}</th>
-              <th style={th("marketValue", "Value")}    onClick={() => toggleSort("marketValue")}>Mkt<br/>Value{arrow("marketValue")}</th>
-              <th style={th(null, "Price")}             >Mkt<br/>Price</th>
-              <th style={th("unrealizedGain", "Gain")}  onClick={() => toggleSort("unrealizedGain")}>Unreal.<br/>Gain{arrow("unrealizedGain")}</th>
-              <th style={th(null, "Return")}            >Return<br/>%</th>
-              <th style={th(null, "Held")}              >Held</th>
-              <th style={th(null, "Alloc")}             >Alloc<br/>%</th>
+            <tr>
+              <SortTh label="Symbol"              {...thP("symbol")}          />
+              <NoSortTh label="30D"               />
+              <SortTh label={<>Day<br/>Chg</>}    {...thP("_dayChangePct")}   />
+              <SortTh label="Qty"                 {...thP("_quantityHeld")}   />
+              <SortTh label={<>Avg<br/>Cost</>}   {...thP("_avgCost")}        />
+              <SortTh label={<>Mkt<br/>Value</>}  {...thP("_marketValue")}    />
+              <NoSortTh label={<>Mkt<br/>Price</>} />
+              <SortTh label={<>Unreal.<br/>Gain</>} {...thP("_unrealGain")}   />
+              <SortTh label={<>Return<br/>%</>}   {...thP("_returnPct")}      />
+              <SortTh label="Held"                {...thP("_firstBuyDate")}   />
+              <SortTh label={<>Alloc<br/>%</>}    {...thP("_allocationPct")}  />
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0
               ? <tr><td colSpan={11} style={{ padding: "32px 0", color: C.muted, textAlign: "center" }}>No holdings found.</td></tr>
               : sorted.map((h: any) => {
-                const returnPct = Number(h.totalCostBasis) > 0
-                  ? ((Number(h.marketValue) - Number(h.totalCostBasis)) / Number(h.totalCostBasis) * 100)
-                  : 0;
-                const dayUp = Number(h.dayChange ?? 0) >= 0;
+                const dayUp    = Number(h.dayChange ?? 0) >= 0;
+                const sparkUp  = h._sparkTrend >= 0;
                 const sparkData = Array.isArray(h.sparkline)
                   ? h.sparkline.map((v: number) => ({ v }))
                   : [];
@@ -225,7 +345,7 @@ export default function Holdings() {
                       {sparkData.length > 1
                         ? <ResponsiveContainer width={80} height={36}>
                             <LineChart data={sparkData}>
-                              <Line type="monotone" dataKey="v" stroke={dayUp ? C.green : C.red}
+                              <Line type="monotone" dataKey="v" stroke={sparkUp ? C.green : C.red}
                                 strokeWidth={1.5} dot={false} />
                             </LineChart>
                           </ResponsiveContainer>
@@ -239,23 +359,21 @@ export default function Holdings() {
                             </span></>
                         : "—"}
                     </td>
-                    <td style={tableCellStyle}>{Number(h.quantityHeld).toFixed(4)}</td>
-                    <td style={tableCellStyle}>${Number(h.averageCostBasis).toFixed(2)}</td>
-                    <td style={{ ...tableCellStyle, fontWeight: 600 }}>
-                      ${Number(h.marketValue).toLocaleString("en-US",{minimumFractionDigits:2})}
-                    </td>
+                    <td style={tableCellStyle}>{h._quantityHeld.toFixed(4)}</td>
+                    <td style={tableCellStyle}>${h._avgCost.toFixed(2)}</td>
+                    <td style={{ ...tableCellStyle, fontWeight: 600 }}>{fmt$(h._marketValue)}</td>
                     <td style={tableCellStyle}>${Number(h.marketPrice).toFixed(2)}</td>
-                    <td style={{ ...tableCellStyle, color: Number(h.unrealizedGain) >= 0 ? C.green : C.red }}>
-                      ${Number(h.unrealizedGain).toLocaleString("en-US",{minimumFractionDigits:2})}
+                    <td style={{ ...tableCellStyle, color: h._unrealGain >= 0 ? C.green : C.red }}>
+                      {fmt$(h._unrealGain)}
                     </td>
-                    <td style={{ ...tableCellStyle, color: returnPct >= 0 ? C.green : C.red }}>
-                      {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(2)}%
+                    <td style={{ ...tableCellStyle, color: h._returnPct >= 0 ? C.green : C.red }}>
+                      {h._returnPct >= 0 ? "+" : ""}{h._returnPct.toFixed(2)}%
                     </td>
                     <td style={{ ...tableCellStyle, color: C.muted, fontSize: "13px" }}>
-                      {holdingPeriod(h.firstBuyDate)}
+                      {holdingPeriod(h._firstBuyDate)}
                     </td>
                     <td style={tableCellStyle}>
-                      {Number(h.allocationPercent).toFixed(1)}%
+                      {h._allocationPct.toFixed(1)}%
                     </td>
                   </tr>
                 );
@@ -316,7 +434,7 @@ export default function Holdings() {
                             background: "transparent", color: C.muted, border: "none",
                             cursor: "pointer", fontSize: "13px", padding: "4px",
                           }}>✎</button>
-                          <button onClick={() => deleteWatchlist(wl.id)} style={{
+                          <button onClick={() => deleteWatchlist(wl.id, wl.name)} style={{
                             background: "transparent", color: C.muted, border: "none",
                             cursor: "pointer", fontSize: "13px", padding: "4px",
                           }}>✕</button>
@@ -340,7 +458,7 @@ export default function Holdings() {
                       <p style={labelStyle}>{active.itemCount} {active.itemCount === 1 ? "Asset" : "Assets"}</p>
                       <h3 style={{ fontSize: "28px", margin: "8px 0 0" }}>{active.name}</h3>
                     </div>
-                    <div style={{ position: "relative", width: "260px" }}>
+                    <div ref={searchRef} style={{ position: "relative", width: "260px" }}>
                       <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Add asset by symbol…"
                         style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontSize: "13px", padding: "9px 14px" }} />
@@ -387,6 +505,10 @@ export default function Holdings() {
                             const sparkData = Array.isArray(item.sparkline)
                               ? item.sparkline.map((v: number) => ({ v }))
                               : [];
+                            // Watchlist spark: color by 30d trend, not today's move
+                            const sparkUp = sparkData.length > 1
+                              ? sparkData[sparkData.length - 1].v >= sparkData[0].v
+                              : up;
                             return (
                               <tr key={item.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
                                 <td style={tableCellStyle}>
@@ -401,7 +523,7 @@ export default function Holdings() {
                                     ? <ResponsiveContainer width={80} height={36}>
                                         <LineChart data={sparkData}>
                                           <Line type="monotone" dataKey="v"
-                                            stroke={up ? C.green : C.red} strokeWidth={1.5} dot={false} />
+                                            stroke={sparkUp ? C.green : C.red} strokeWidth={1.5} dot={false} />
                                         </LineChart>
                                       </ResponsiveContainer>
                                     : <span style={{ color: C.muted, fontSize: "11px" }}>—</span>}

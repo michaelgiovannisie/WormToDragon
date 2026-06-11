@@ -12,7 +12,7 @@ export interface HoldingsSyncStatus {
 
 const POLL_INTERVAL_MS = 2500;
 
-export function useHoldingsSync() {
+export function useHoldingsSync(onComplete?: () => void) {
   const [status, setStatus] = useState<HoldingsSyncStatus>({
     state: "idle",
     completed: 0,
@@ -23,6 +23,8 @@ export function useHoldingsSync() {
   });
   const [starting, setStarting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete; // always current, no stale closure
 
   const stopPolling = () => {
     if (pollRef.current != null) {
@@ -37,7 +39,10 @@ export function useHoldingsSync() {
       if (!res.ok) return;
       const data: HoldingsSyncStatus = await res.json();
       setStatus(data);
-      if (data.state !== "running") stopPolling();
+      if (data.state !== "running") {
+        stopPolling();
+        if (data.state === "completed") onCompleteRef.current?.();
+      }
     } catch {
       // Network error — keep polling silently
     }

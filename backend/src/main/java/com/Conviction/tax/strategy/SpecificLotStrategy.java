@@ -95,6 +95,7 @@ public class SpecificLotStrategy implements TaxStrategy {
             lot.setQuantityRemaining(lot.getQuantityRemaining().subtract(qty));
             if (lot.getQuantityRemaining().compareTo(BigDecimal.ZERO) == 0) {
                 lot.setClosed(true);
+                lot.setClosedDate(sellTransaction.getTransactionDate());
             }
 
             totalAllocated = totalAllocated.add(qty);

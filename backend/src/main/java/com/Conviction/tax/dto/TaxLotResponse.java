@@ -18,6 +18,7 @@ public record TaxLotResponse(
         BigDecimal totalCostBasis,
         LocalDate acquisitionDate,
         Boolean closed,
+        LocalDate closedDate,
         LocalDateTime createdAt
 ) {
 }

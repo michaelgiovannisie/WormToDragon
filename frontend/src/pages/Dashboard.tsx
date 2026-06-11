@@ -9,40 +9,113 @@ import { C, PIE_COLORS, sectionStyle, labelStyle, tooltipStyle, pillStyle, table
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
 import { HoldingsSyncWidget } from "../components/HoldingsSyncWidget";
 
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function fmt$(v: number): string {
+  const abs = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (v < 0 ? "-$" : "$") + abs;
+}
+
+type SortDir = "asc" | "desc";
+
+function useSortable<T>(
+  data: T[],
+  defaultKey: keyof T | null = null,
+  defaultDir: SortDir = "asc",
+  descFirstKeys: (keyof T)[] = [],
+) {
+  const [sortKey, setSortKey] = useState<keyof T | null>(defaultKey);
+  const [sortDir, setSortDir] = useState<SortDir>(defaultDir);
+
+  function toggle(key: keyof T) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(descFirstKeys.includes(key) ? "desc" : "asc"); }
+  }
+
+  const sorted = [...data].sort((a, b) => {
+    if (!sortKey) return 0;
+    const av = a[sortKey], bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  return { sorted, sortKey, sortDir, toggle };
+}
+
+function SortTh({ label, sortKey, activeSortKey, sortDir, onSort }: {
+  label: string;
+  sortKey: string;
+  activeSortKey: string | null;
+  sortDir: SortDir;
+  onSort: (k: string) => void;
+}) {
+  const active = activeSortKey === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      style={{
+        color: active ? C.gold : C.muted,
+        fontSize: "12px", textTransform: "uppercase" as const,
+        letterSpacing: "0.06em", textAlign: "left" as const,
+        paddingBottom: "12px", cursor: "pointer",
+        userSelect: "none" as const, whiteSpace: "nowrap" as const,
+      }}
+    >
+      {label}
+      <span style={{ marginLeft: "4px", opacity: active ? 1 : 0.3 }}>
+        {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </th>
+  );
+}
+
+const RANGES = ["1w","1m","3m","ytd","1y","all"];
+
+// ── component ──────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [summary, setSummary]           = useState<any>(null);
   const [holdings, setHoldings]         = useState<any[]>([]);
   const [snapshots, setSnapshots]       = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading]           = useState(true);
   const [chartRange, setChartRange]     = useState("1y");
   const [benchmark, setBenchmark]       = useState("SPY");
   const [benchmarkInput, setBenchmarkInput] = useState("SPY");
   const [benchmarkPrices, setBenchmarkPrices] = useState<any[]>([]);
+  const [showAllTx, setShowAllTx]       = useState(false);
 
-  const RANGES = ["1w","1m","3m","ytd","1y","all"];
-
-  const loadData = (range = chartRange, bench = benchmark) => {
-    fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`)
-      .then(r => r.json()).then(setSummary).catch(console.error);
-    fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`)
-      .then(r => r.json()).then(setHoldings).catch(console.error);
-    fetch(`${API}/portfolios/${PORTFOLIO_ID}/value-history?range=${range}`)
-      .then(r => r.json()).then(setSnapshots).catch(console.error);
-    fetch(`${API}/transactions/account/${ACCOUNT_ID}`)
-      .then(r => r.json()).then(setTransactions).catch(console.error);
-    if (bench !== "none") {
-      fetch(`${API}/historical-prices/${bench}`)
-        .then(r => r.json()).then(d => setBenchmarkPrices(Array.isArray(d) ? d : []))
-        .catch(() => setBenchmarkPrices([]));
-    } else {
-      setBenchmarkPrices([]);
-    }
+  // Core data — summary, holdings, transactions. Only re-fetched on mount.
+  const loadCoreData = () => {
+    Promise.all([
+      fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}/summary`).then(r => r.json()),
+      fetch(`${API}/holdings/portfolio/${PORTFOLIO_ID}`).then(r => r.json()),
+      fetch(`${API}/transactions/account/${ACCOUNT_ID}`).then(r => r.json()),
+    ]).then(([s, h, t]) => {
+      setSummary(s);
+      setHoldings(Array.isArray(h) ? h : []);
+      setTransactions(Array.isArray(t) ? t : []);
+      setLoading(false);
+    }).catch(e => { console.error(e); setLoading(false); });
   };
 
-  useEffect(() => { loadData(); }, []);
+  // Snapshots — range-dependent, cheap to re-fetch.
+  const loadSnapshots = (range: string) => {
+    fetch(`${API}/portfolios/${PORTFOLIO_ID}/value-history?range=${range}`)
+      .then(r => r.json()).then(setSnapshots).catch(console.error);
+  };
 
-  // Re-fetch benchmark when selection changes
+  // On mount: load everything once.
+  useEffect(() => {
+    loadCoreData();
+    loadSnapshots(chartRange);
+  }, []);
+
+  // Benchmark — re-fetch only when the symbol changes.
   useEffect(() => {
     if (!benchmark || benchmark === "none") { setBenchmarkPrices([]); return; }
     fetch(`${API}/historical-prices/${benchmark.toUpperCase()}`)
@@ -52,24 +125,19 @@ export default function Dashboard() {
 
   const handleRangeChange = (range: string) => {
     setChartRange(range);
-    loadData(range);
+    loadSnapshots(range);
   };
 
-  const trendData = snapshots.length > 0
-    ? snapshots.map((s: any) => ({ date: s.date, value: Number(s.value ?? 0) }))
-    : [];
+  // ── chart data ─────────────────────────────────────────────────────────
 
-  // Normalized benchmark overlay — both series indexed to 100 at first snapshot date
+  const trendData = snapshots.map((s: any) => ({ date: s.date, value: Number(s.value ?? 0) }));
+
   const benchmarkChartData = (() => {
     if (trendData.length === 0 || benchmarkPrices.length === 0) return trendData;
 
-    // Build a date→close map for the benchmark
     const bMap: Record<string, number> = {};
-    for (const p of benchmarkPrices) {
-      bMap[p.priceDate] = Number(p.close);
-    }
+    for (const p of benchmarkPrices) bMap[p.priceDate] = Number(p.close);
 
-    // Find first benchmark close on or after the first snapshot date
     const firstDate = trendData[0].date;
     const sortedBDates = Object.keys(bMap).sort();
     const firstBDate = sortedBDates.find(d => d >= firstDate);
@@ -79,50 +147,74 @@ export default function Dashboard() {
     const firstBenchmarkClose = bMap[firstBDate];
     if (!firstPortfolioValue || !firstBenchmarkClose) return trendData;
 
-    return trendData.map(pt => {
-      // Find nearest benchmark close on or before this date
-      const nearestDate = sortedBDates.filter(d => d <= pt.date).slice(-1)[0];
-      const bClose = nearestDate ? bMap[nearestDate] : null;
-      const benchmarkNorm = bClose != null
-        ? (bClose / firstBenchmarkClose) * firstPortfolioValue
-        : null;
-      return { ...pt, benchmark: benchmarkNorm };
-    });
+    // O(n+m) pointer walk — both series are date-sorted ascending
+    return (() => {
+      let bPtr = 0;
+      return trendData.map(pt => {
+        while (bPtr + 1 < sortedBDates.length && sortedBDates[bPtr + 1] <= pt.date) bPtr++;
+        const nearestDate = sortedBDates[bPtr] <= pt.date ? sortedBDates[bPtr] : null;
+        const bClose = nearestDate ? bMap[nearestDate] : null;
+        const benchmarkNorm = bClose != null
+          ? (bClose / firstBenchmarkClose) * firstPortfolioValue
+          : null;
+        return { ...pt, benchmark: benchmarkNorm };
+      });
+    })();
   })();
 
-  // Alpha stats
   const alphaStats = (() => {
     const pts = benchmarkChartData.filter((p: any) => p.benchmark != null);
     if (pts.length < 2 || trendData.length < 2) return null;
-    const firstValue     = trendData[0].value;
-    const lastValue      = trendData[trendData.length - 1].value;
-    const firstBench     = pts[0].benchmark as number;
-    const lastBench      = pts[pts.length - 1].benchmark as number;
-    const portfolioRet   = ((lastValue - firstValue) / firstValue) * 100;
-    const benchmarkRet   = ((lastBench - firstBench) / firstBench) * 100;
-    const alpha          = portfolioRet - benchmarkRet;
+    const firstValue   = trendData[0].value;
+    const lastValue    = trendData[trendData.length - 1].value;
+    const firstBench   = pts[0].benchmark as number;
+    const lastBench    = pts[pts.length - 1].benchmark as number;
+    const portfolioRet = ((lastValue - firstValue) / firstValue) * 100;
+    const benchmarkRet = ((lastBench - firstBench) / firstBench) * 100;
+    const alpha        = portfolioRet - benchmarkRet;
     return { portfolioRet, benchmarkRet, alpha };
   })();
 
-  const recentTx = [...transactions]
-    .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
-    .slice(0, 10);
+  // ── derived data ────────────────────────────────────────────────────────
 
-  const totalReturn = (() => {
-    const cost = Number(summary?.totalCostBasis ?? 0);
-    const unrealized = Number(summary?.totalUnrealizedGain ?? 0);
-    const realized = Number(summary?.totalRealizedGain ?? 0);
-    if (cost === 0) return 0;
-    return ((unrealized + realized) / cost) * 100;
-  })();
+  // Use the backend-computed unrealizedGainPercent (cost basis is open positions
+  // only — mixing it with all-time realized gains in the frontend produces a
+  // misleading number).
+  const unrealizedReturnPct = Number(summary?.unrealizedGainPercent ?? 0);
 
   const metricCards = [
-    { label: "Portfolio Value",  value: `$${Number(summary?.totalMarketValue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}` },
-    { label: "Unrealized Gain",  value: `$${Number(summary?.totalUnrealizedGain ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: Number(summary?.totalUnrealizedGain ?? 0) >= 0 ? C.green : C.red },
-    { label: "Realized Gain",    value: `$${Number(summary?.totalRealizedGain ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: Number(summary?.totalRealizedGain ?? 0) >= 0 ? C.green : C.red },
-    { label: "Total Return",     value: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)}%`, color: totalReturn >= 0 ? C.green : C.red },
-    { label: "Positions",        value: String(holdings.length) },
+    { label: "Portfolio Value",    value: fmt$(Number(summary?.totalMarketValue ?? 0)) },
+    { label: "Unrealized Gain",    value: fmt$(Number(summary?.totalUnrealizedGain ?? 0)), color: Number(summary?.totalUnrealizedGain ?? 0) >= 0 ? C.green : C.red },
+    { label: "Realized Gain",      value: fmt$(Number(summary?.totalRealizedGain ?? 0)),   color: Number(summary?.totalRealizedGain ?? 0) >= 0 ? C.green : C.red },
+    { label: "Unrealized Return",  value: `${unrealizedReturnPct >= 0 ? "+" : ""}${unrealizedReturnPct.toFixed(2)}%`, color: unrealizedReturnPct >= 0 ? C.green : C.red },
+    { label: "Positions",          value: String(holdings.length) },
   ];
+
+  // Enrich holdings with numeric sortable fields; default sort: market value desc.
+  const enrichedHoldings = holdings.map((h: any) => ({
+    ...h,
+    _symbol:       h.symbol as string,
+    _marketValue:  Number(h.marketValue),
+    _unrealGain:   Number(h.unrealizedGain),
+    _return:       Number(h.totalCostBasis) > 0
+                     ? (Number(h.marketValue) - Number(h.totalCostBasis)) / Number(h.totalCostBasis) * 100
+                     : 0,
+    _quantity:     Number(h.quantityHeld),
+    _avgCost:      Number(h.averageCostBasis),
+    _costBasis:    Number(h.totalCostBasis),
+  }));
+  const holdingsSort = useSortable(
+    enrichedHoldings, "_marketValue", "desc",
+    ["_marketValue", "_costBasis", "_unrealGain", "_return", "_quantity"],
+  );
+
+  const recentTx = [...transactions]
+    .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+  const visibleTx = showAllTx ? recentTx : recentTx.slice(0, 10);
+
+  // ── render ──────────────────────────────────────────────────────────────
+
+  if (loading) return <p style={{ color: C.gold, fontFamily: C.font, padding: "40px" }}>Loading…</p>;
 
   return (
     <div style={{ color: C.text, fontFamily: C.font }}>
@@ -134,7 +226,7 @@ export default function Dashboard() {
         A refined view of capital, conviction, and performance.
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
-        <HoldingsSyncWidget />
+        <HoldingsSyncWidget onComplete={loadCoreData} />
         <div style={{ marginLeft: "auto" }}>
           <Nasdaq100SyncWidget />
         </div>
@@ -217,7 +309,7 @@ export default function Dashboard() {
               <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 12 }} interval="preserveStartEnd" minTickGap={60} />
               <YAxis stroke={C.muted} tick={{ fontSize: 12 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
               <Tooltip {...tooltipStyle} formatter={(v: any, name: string) => [
-                `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+                fmt$(Number(v)),
                 name === "benchmark" ? benchmark : "Portfolio"
               ]} />
               <Line type="monotone" dataKey="value" stroke={C.green} strokeWidth={2} dot={false} name="Portfolio" />
@@ -228,13 +320,12 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
 
-          {/* Alpha detail row */}
           {alphaStats && (
             <div style={{ display: "flex", gap: "24px", marginTop: "16px", paddingTop: "16px", borderTop: `1px solid ${C.borderSubtle}` }}>
               {[
-                { label: "Your Return",       value: `${alphaStats.portfolioRet >= 0 ? "+" : ""}${alphaStats.portfolioRet.toFixed(2)}%`, color: alphaStats.portfolioRet >= 0 ? C.green : C.red },
+                { label: "Your Return",         value: `${alphaStats.portfolioRet >= 0 ? "+" : ""}${alphaStats.portfolioRet.toFixed(2)}%`, color: alphaStats.portfolioRet >= 0 ? C.green : C.red },
                 { label: `${benchmark} Return`, value: `${alphaStats.benchmarkRet >= 0 ? "+" : ""}${alphaStats.benchmarkRet.toFixed(2)}%`, color: "#60a5fa" },
-                { label: "Alpha",             value: `${alphaStats.alpha >= 0 ? "+" : ""}${alphaStats.alpha.toFixed(2)}%`, color: alphaStats.alpha >= 0 ? C.green : C.red },
+                { label: "Alpha",               value: `${alphaStats.alpha >= 0 ? "+" : ""}${alphaStats.alpha.toFixed(2)}%`,               color: alphaStats.alpha >= 0 ? C.green : C.red },
               ].map(({ label, value, color }) => (
                 <div key={label}>
                   <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</p>
@@ -256,7 +347,7 @@ export default function Dashboard() {
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip {...tooltipStyle} formatter={(v: any) => [`$${Number(v).toLocaleString()}`, "Value"]} />
+              <Tooltip {...tooltipStyle} formatter={(v: any) => [fmt$(Number(v)), "Value"]} />
               <Legend formatter={(v) => <span style={{ color: C.muted, fontSize: "12px" }}>{v}</span>} />
             </PieChart>
           </ResponsiveContainer>
@@ -269,47 +360,58 @@ export default function Dashboard() {
         <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Current Positions</h3>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ color: C.muted, fontSize: "12px", textAlign: "left", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              <th style={{ paddingBottom: "12px" }}>Symbol</th>
-              <th style={{ paddingBottom: "12px" }}>Quantity</th>
-              <th style={{ paddingBottom: "12px" }}>Avg Cost</th>
-              <th style={{ paddingBottom: "12px" }}>Market Value</th>
-              <th style={{ paddingBottom: "12px" }}>Unrealized Gain</th>
-              <th style={{ paddingBottom: "12px" }}>Return %</th>
+            <tr>
+              {(["_symbol","_quantity","_avgCost","_costBasis","_marketValue","_unrealGain","_return"] as const).map((key, i) => (
+                <SortTh
+                  key={key}
+                  label={["Symbol","Quantity","Avg Cost","Cost Basis","Market Value","Unrealized Gain","Return %"][i]}
+                  sortKey={key}
+                  activeSortKey={holdingsSort.sortKey as string}
+                  sortDir={holdingsSort.sortDir}
+                  onSort={k => holdingsSort.toggle(k as any)}
+                />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {[...holdings].sort((a, b) => a.symbol.localeCompare(b.symbol)).map((h: any) => {
-              const gain = Number(h.unrealizedGain);
-              const ret  = h.totalCostBasis > 0
-                ? ((Number(h.marketValue) - Number(h.totalCostBasis)) / Number(h.totalCostBasis) * 100).toFixed(2)
-                : "0.00";
-              return (
-                <tr key={h.assetId} style={{ borderTop: `1px solid ${C.borderSubtle}`, cursor: "pointer" }}
-                  onClick={() => navigate(`/research?symbol=${h.symbol}`)}>
-                  <td style={tableCellStyle}>
-                    <span style={{ color: C.gold, fontWeight: 700 }}>{h.symbol}</span>
-                  </td>
-                  <td style={tableCellStyle}>{Number(h.quantityHeld).toFixed(4)}</td>
-                  <td style={tableCellStyle}>${Number(h.averageCostBasis).toFixed(2)}</td>
-                  <td style={tableCellStyle}>${Number(h.marketValue).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                  <td style={{ ...tableCellStyle, color: gain >= 0 ? C.green : C.red }}>
-                    ${gain.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td style={{ ...tableCellStyle, color: Number(ret) >= 0 ? C.green : C.red }}>
-                    {ret}%
-                  </td>
-                </tr>
-              );
-            })}
+            {holdingsSort.sorted.map((h: any) => (
+              <tr key={h.assetId} style={{ borderTop: `1px solid ${C.borderSubtle}`, cursor: "pointer" }}
+                onClick={() => navigate(`/research?symbol=${h.symbol}`)}>
+                <td style={tableCellStyle}>
+                  <span style={{ color: C.gold, fontWeight: 700 }}>{h.symbol}</span>
+                </td>
+                <td style={tableCellStyle}>{h._quantity.toFixed(4)}</td>
+                <td style={tableCellStyle}>{fmt$(h._avgCost)}</td>
+                <td style={tableCellStyle}>{fmt$(h._costBasis)}</td>
+                <td style={tableCellStyle}>{fmt$(h._marketValue)}</td>
+                <td style={{ ...tableCellStyle, color: h._unrealGain >= 0 ? C.green : C.red }}>
+                  {fmt$(h._unrealGain)}
+                </td>
+                <td style={{ ...tableCellStyle, color: h._return >= 0 ? C.green : C.red }}>
+                  {h._return >= 0 ? "+" : ""}{h._return.toFixed(2)}%
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </section>
 
       {/* Recent transactions */}
       <section style={sectionStyle}>
-        <p style={labelStyle}>Ledger</p>
-        <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Recent Transactions</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "24px" }}>
+          <div>
+            <p style={labelStyle}>Ledger</p>
+            <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Recent Transactions</h3>
+          </div>
+          {recentTx.length > 10 && (
+            <button onClick={() => setShowAllTx(v => !v)} style={{
+              background: "transparent", color: C.muted, border: `1px solid ${C.border}`,
+              borderRadius: "8px", padding: "4px 14px", fontSize: "12px", cursor: "pointer",
+            }}>
+              {showAllTx ? "Show less" : `Show all ${recentTx.length}`}
+            </button>
+          )}
+        </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ color: C.muted, fontSize: "12px", textAlign: "left", letterSpacing: "0.06em", textTransform: "uppercase" }}>
@@ -319,21 +421,25 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody>
-            {recentTx.map((tx: any) => (
-              <tr key={tx.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
-                <td style={tableCellStyle}>{tx.transactionDate}</td>
-                <td style={tableCellStyle}><span style={pillStyle(tx.transactionType)}>{tx.transactionType}</span></td>
-                <td style={{ ...tableCellStyle, color: C.gold, cursor: "pointer" }}
-                  onClick={() => navigate(`/research?symbol=${tx.symbol}`)}>
-                  {tx.symbol}
-                </td>
-                <td style={tableCellStyle}>{Number(tx.quantity).toFixed(4)}</td>
-                <td style={tableCellStyle}>${Number(tx.pricePerUnit).toFixed(2)}</td>
-                <td style={{ ...tableCellStyle, color: Number(tx.realizedGain) >= 0 ? C.green : C.red }}>
-                  ${Number(tx.realizedGain).toFixed(2)}
-                </td>
-              </tr>
-            ))}
+            {visibleTx.map((tx: any) => {
+              const isBuy = tx.transactionType === "BUY";
+              const gain  = Number(tx.realizedGain);
+              return (
+                <tr key={tx.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
+                  <td style={tableCellStyle}>{new Date(tx.transactionDate + "T00:00:00").toLocaleDateString()}</td>
+                  <td style={tableCellStyle}><span style={pillStyle(tx.transactionType)}>{tx.transactionType}</span></td>
+                  <td style={{ ...tableCellStyle, color: C.gold, cursor: "pointer" }}
+                    onClick={() => navigate(`/research?symbol=${tx.symbol}`)}>
+                    {tx.symbol}
+                  </td>
+                  <td style={tableCellStyle}>{Number(tx.quantity).toFixed(4)}</td>
+                  <td style={tableCellStyle}>{fmt$(Number(tx.pricePerUnit))}</td>
+                  <td style={{ ...tableCellStyle, color: gain >= 0 ? C.green : C.red }}>
+                    {isBuy ? <span style={{ color: C.muted }}>—</span> : fmt$(gain)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>

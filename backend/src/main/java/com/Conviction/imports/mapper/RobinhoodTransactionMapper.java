@@ -57,7 +57,7 @@ public class RobinhoodTransactionMapper {
     private TransactionType mapTransactionType(String code) {
         return switch (code) {
             case "BUY" -> TransactionType.BUY;
-            case "SELL" -> TransactionType.SELL;
+            case "SELL", "BCXL", "MRGS" -> TransactionType.SELL; // BCXL = cancellation, MRGS = merger/acquisition
             case "DIV", "DIVIDEND" -> TransactionType.DIVIDEND;
             default -> null;
         };
@@ -66,11 +66,13 @@ public class RobinhoodTransactionMapper {
     private BigDecimal parseMoney(String raw) {
         if (raw == null || raw.isBlank()) return BigDecimal.ZERO;
         // Strip $, commas, parentheses (negatives shown as "(123.45)")
+        // Also strip trailing letters e.g. "1.2323S" from merger rows
         String cleaned = raw.trim()
                 .replace("$", "")
                 .replace(",", "")
                 .replace("(", "-")
-                .replace(")", "");
+                .replace(")", "")
+                .replaceAll("[A-Za-z]+$", "");
         try {
             return new BigDecimal(cleaned);
         } catch (Exception e) {

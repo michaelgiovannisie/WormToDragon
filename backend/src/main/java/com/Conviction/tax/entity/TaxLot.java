@@ -67,6 +67,8 @@ public class TaxLot {
     @Column(nullable = false)
     private Boolean closed = false;
 
+    private LocalDate closedDate;  // date of the sell transaction that fully closed this lot
+
     private LocalDateTime createdAt;
 
     @PrePersist

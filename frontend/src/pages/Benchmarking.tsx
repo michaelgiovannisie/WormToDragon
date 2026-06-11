@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { API, PORTFOLIO_ID, ACCOUNT_ID } from "../constants";
-import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
+import { C, sectionStyle, labelStyle, tableCellStyle, tooltipStyle } from "../theme";
 
 // ── types ──────────────────────────────────────────────────────────────────
 
@@ -14,11 +15,17 @@ interface HistoricalPriceEntry {
   close: number;
 }
 
+interface ChartPoint {
+  date: string;
+  portfolio: number;
+  benchmark?: number;
+}
+
 interface YearRow {
   year: number | "Current";
   endDate: string;
   portfolioValue: number | null;
-  portfolioPct: number | null;  // TWR for the period
+  portfolioPct: number | null;
   benchmarkPct: number | null;
 }
 
@@ -28,12 +35,23 @@ interface CagrRow {
   benchmarkCagr: number | null;
 }
 
+// Cached portfolio data so benchmark load doesn't re-fetch everything
+interface PortfolioCache {
+  pv: Map<string, number>;
+  uniqueTxDates: string[];
+  firstTxDate: string;
+  firstYear: number;
+  lastFullYear: number;
+  currentYear: number;
+  todayStr: string;
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 function prevDay(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function closestOnOrBefore(prices: HistoricalPriceEntry[], dateStr: string): number | null {
@@ -43,23 +61,6 @@ function closestOnOrBefore(prices: HistoricalPriceEntry[], dateStr: string): num
   return sorted.length > 0 ? sorted[0].close : null;
 }
 
-/**
- * Time-Weighted Return for a single period.
- *
- * startDate  — anchor date whose value is the starting portfolio value (after any
- *              cash flow already included on that day, e.g. first-tx date or Dec 31)
- * endDate    — last date of the period (e.g. Dec 31 or today)
- * txDates    — unique transaction dates that fall STRICTLY between startDate and endDate,
- *              sorted ascending. Each represents a cash-flow event.
- *
- * Sub-period structure:
- *   [startDate → prevDay(txDates[0])]  growth before first cash flow
- *   [txDates[0] → prevDay(txDates[1])] growth after first cash flow, before second
- *   ...
- *   [txDates[n] → endDate]             growth after last cash flow to period end
- *
- * TWR = product of (v_end / v_start) for each sub-period − 1
- */
 function computeTWR(
   startDate: string,
   endDate: string,
@@ -68,16 +69,13 @@ function computeTWR(
 ): number | null {
   const vStart = pv.get(startDate);
   if (!vStart) return null;
-
-  // Build (afterCashFlow, beforeNextCashFlow) pairs
   const afterDates  = [startDate, ...txDates];
   const beforeDates = [...txDates.map(prevDay), endDate];
-
   let product = 1;
   for (let i = 0; i < afterDates.length; i++) {
     const v0 = pv.get(afterDates[i]);
     const v1 = pv.get(beforeDates[i]);
-    if (!v0 || !v1) continue; // skip sub-period if data missing
+    if (!v0 || !v1) continue;
     product *= v1 / v0;
   }
   return (product - 1) * 100;
@@ -104,46 +102,41 @@ function diffColor(v: number | null): string {
 
 export default function Benchmarking() {
   const [benchmarkInput, setBenchmarkInput] = useState("SPY");
-  const [benchmarkSymbol, setBenchmarkSymbol] = useState("SPY");
+  const [benchmarkSymbol, setBenchmarkSymbol] = useState<string | null>(null);
 
-  const [yearRows, setYearRows] = useState<YearRow[]>([]);
-  const [cagrRows, setCagrRows] = useState<CagrRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [yearRows, setYearRows]   = useState<YearRow[]>([]);
+  const [cagrRows, setCagrRows]   = useState<CagrRow[]>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
+
+  const [loadingPortfolio, setLoadingPortfolio] = useState(false);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData(benchmarkSymbol);
-  }, [benchmarkSymbol]);
+  const cache = useRef<PortfolioCache | null>(null);
 
-  async function loadData(symbol: string) {
-    setLoading(true);
+  // ── portfolio load (on mount) ──────────────────────────────────────────
+
+  useEffect(() => {
+    loadPortfolioData();
+  }, []);
+
+  async function loadPortfolioData() {
+    setLoadingPortfolio(true);
     setError(null);
     try {
-      // 1. Fetch all transactions to get unique tx dates
       const txRes = await fetch(`${API}/transactions/account/${ACCOUNT_ID}`);
       if (!txRes.ok) throw new Error("Failed to fetch transactions");
       const txData: { transactionDate: string }[] = await txRes.json();
-
-      if (txData.length === 0) {
-        setYearRows([]);
-        setCagrRows([]);
-        return;
-      }
+      if (txData.length === 0) return;
 
       const uniqueTxDates = [...new Set(txData.map(t => t.transactionDate))].sort();
       const firstTxDate   = uniqueTxDates[0];
       const firstYear     = parseInt(firstTxDate.slice(0, 4));
       const today         = new Date();
-      const todayStr      = today.toISOString().slice(0, 10);
+      const todayStr      = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
       const currentYear   = today.getFullYear();
       const lastFullYear  = currentYear - 1;
 
-      // 2. Build the full set of dates to fetch for TWR:
-      //    - firstTxDate (inception anchor)
-      //    - Dec 31 of each full year
-      //    - today
-      //    - every unique tx date (after-cash-flow anchor)
-      //    - day before every unique tx date (before-cash-flow anchor)
       const datesToFetch = new Set<string>();
       datesToFetch.add(firstTxDate);
       for (let y = firstYear; y <= lastFullYear; y++) datesToFetch.add(`${y}-12-31`);
@@ -153,7 +146,6 @@ export default function Benchmarking() {
         datesToFetch.add(prevDay(d));
       }
 
-      // 3. Fetch all portfolio values in parallel
       const pv = new Map<string, number>();
       await Promise.all(
         Array.from(datesToFetch).map(async d => {
@@ -165,51 +157,10 @@ export default function Benchmarking() {
         })
       );
 
-      // 4. Fetch benchmark historical prices
-      const bmRes = await fetch(`${API}/historical-prices/${symbol}`);
-      if (!bmRes.ok) throw new Error(`Failed to fetch benchmark prices for ${symbol}`);
-      const bmPrices: HistoricalPriceEntry[] = await bmRes.json();
+      cache.current = { pv, uniqueTxDates, firstTxDate, firstYear, lastFullYear, currentYear, todayStr };
 
-      // 5. Build year rows using TWR for portfolio, simple return for benchmark
-      const rows: YearRow[] = [];
-
-      const buildRow = (
-        year: number | "Current",
-        startDate: string,
-        endDate: string
-      ): YearRow => {
-        // Tx dates strictly between startDate and endDate
-        const txInPeriod = uniqueTxDates.filter(d => d > startDate && d <= endDate);
-
-        const portfolioPct  = computeTWR(startDate, endDate, txInPeriod, pv);
-        const startBm       = closestOnOrBefore(bmPrices, startDate);
-        const endBm         = closestOnOrBefore(bmPrices, endDate);
-        const benchmarkPct  = startBm && endBm ? ((endBm - startBm) / startBm) * 100 : null;
-        const portfolioValue = pv.get(endDate) ?? null;
-
-        return { year, endDate, portfolioValue, portfolioPct, benchmarkPct };
-      };
-
-      for (let y = firstYear; y <= lastFullYear; y++) {
-        const startDate = y === firstYear ? firstTxDate : `${y - 1}-12-31`;
-        rows.push(buildRow(y, startDate, `${y}-12-31`));
-      }
-
-      // Current partial year
-      {
-        const startDate = currentYear === firstYear ? firstTxDate : `${lastFullYear}-12-31`;
-        rows.push(buildRow("Current", startDate, todayStr));
-      }
-
-      setYearRows(rows);
-
-      // 6. CAGR — chain-link TWR across years, annualise
-      //    For portfolio: use chain-linked TWRs (already TWR per year)
-      //    For benchmark: simple price return annualised
-      const cagrResults: CagrRow[] = [];
-
+      // Portfolio-only helpers
       function portfolioCAGR(fromDate: string, toDate: string): number | null {
-        // Build year rows for the period and chain-link
         const fromYear = parseInt(fromDate.slice(0, 4));
         const toYear   = parseInt(toDate.slice(0, 4));
         let product = 1;
@@ -226,6 +177,67 @@ export default function Benchmarking() {
         return (Math.pow(product, 1 / years) - 1) * 100;
       }
 
+      // Year rows (benchmark columns null until user loads one)
+      const rows: YearRow[] = [];
+      for (let y = firstYear; y <= lastFullYear; y++) {
+        const startDate = y === firstYear ? firstTxDate : `${y - 1}-12-31`;
+        const endDate   = `${y}-12-31`;
+        const txInPeriod = uniqueTxDates.filter(d => d > startDate && d <= endDate);
+        rows.push({
+          year: y, endDate,
+          portfolioValue: pv.get(endDate) ?? null,
+          portfolioPct: computeTWR(startDate, endDate, txInPeriod, pv),
+          benchmarkPct: null,
+        });
+      }
+      const curStart = currentYear === firstYear ? firstTxDate : `${lastFullYear}-12-31`;
+      rows.push({
+        year: "Current", endDate: todayStr,
+        portfolioValue: pv.get(todayStr) ?? null,
+        portfolioPct: computeTWR(curStart, todayStr, uniqueTxDates.filter(d => d > curStart && d <= todayStr), pv),
+        benchmarkPct: null,
+      });
+      setYearRows(rows);
+
+      // Chart — portfolio only
+      const chartPoints: ChartPoint[] = [];
+      for (let y = firstYear; y <= lastFullYear; y++) {
+        const pc = portfolioCAGR(firstTxDate, `${y}-12-31`);
+        if (pc !== null) chartPoints.push({ date: String(y), portfolio: Math.round(pc * 10) / 10 });
+      }
+      const pcNow = portfolioCAGR(firstTxDate, todayStr);
+      if (pcNow !== null) chartPoints.push({ date: "Now", portfolio: Math.round(pcNow * 10) / 10 });
+      setChartData(chartPoints);
+
+      // CAGR rows — benchmark columns null
+      const cagrResults: CagrRow[] = [];
+      cagrResults.push({ label: "Since Inception", portfolioCagr: portfolioCAGR(firstTxDate, todayStr), benchmarkCagr: null });
+      const date3yr = `${currentYear - 3}-12-31`;
+      if (date3yr >= firstTxDate) cagrResults.push({ label: "3-Year", portfolioCagr: portfolioCAGR(date3yr, todayStr), benchmarkCagr: null });
+      const date1yr = `${lastFullYear}-12-31`;
+      if (date1yr >= firstTxDate) cagrResults.push({ label: "YTD", portfolioCagr: portfolioCAGR(date1yr, todayStr), benchmarkCagr: null });
+      setCagrRows(cagrResults);
+
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoadingPortfolio(false);
+    }
+  }
+
+  // ── benchmark load (on demand) ─────────────────────────────────────────
+
+  async function loadBenchmark(symbol: string) {
+    if (!cache.current) { setError("Portfolio data is still loading — please wait."); return; }
+    const { pv, uniqueTxDates, firstTxDate, firstYear, lastFullYear, currentYear, todayStr } = cache.current;
+
+    setLoadingBenchmark(true);
+    setError(null);
+    try {
+      const bmRes = await fetch(`${API}/historical-prices/${symbol}`);
+      if (!bmRes.ok) throw new Error(`Failed to fetch prices for ${symbol}`);
+      const bmPrices: HistoricalPriceEntry[] = await bmRes.json();
+
       function benchmarkCAGR(fromDate: string, toDate: string): number | null {
         const vStart = closestOnOrBefore(bmPrices, fromDate);
         const vEnd   = closestOnOrBefore(bmPrices, toDate);
@@ -235,35 +247,39 @@ export default function Benchmarking() {
         return (Math.pow(vEnd / vStart, 1 / years) - 1) * 100;
       }
 
-      cagrResults.push({
-        label: "Since Inception",
-        portfolioCagr:  portfolioCAGR(firstTxDate, todayStr),
-        benchmarkCagr:  benchmarkCAGR(firstTxDate, todayStr),
-      });
+      // Update chart with benchmark overlay
+      setChartData(prev => prev.map(pt => {
+        const toDate = pt.date === "Now" ? todayStr : `${pt.date}-12-31`;
+        const bc = benchmarkCAGR(firstTxDate, toDate);
+        return { ...pt, benchmark: bc !== null ? Math.round(bc * 10) / 10 : undefined };
+      }));
 
-      const date3yr = `${currentYear - 3}-12-31`;
-      if (date3yr >= firstTxDate) {
-        cagrResults.push({
-          label: "3-Year",
-          portfolioCagr:  portfolioCAGR(date3yr, todayStr),
-          benchmarkCagr:  benchmarkCAGR(date3yr, todayStr),
-        });
-      }
+      // Update year rows with benchmark %
+      setYearRows(prev => prev.map(row => {
+        const startDate = row.year === firstYear ? firstTxDate
+          : row.year === "Current" ? (currentYear === firstYear ? firstTxDate : `${lastFullYear}-12-31`)
+          : `${(row.year as number) - 1}-12-31`;
+        const startBm = closestOnOrBefore(bmPrices, startDate);
+        const endBm   = closestOnOrBefore(bmPrices, row.endDate);
+        return {
+          ...row,
+          benchmarkPct: startBm && endBm ? ((endBm - startBm) / startBm) * 100 : null,
+        };
+      }));
 
-      const date1yr = `${lastFullYear}-12-31`;
-      if (date1yr >= firstTxDate) {
-        cagrResults.push({
-          label: "1-Year",
-          portfolioCagr:  portfolioCAGR(date1yr, todayStr),
-          benchmarkCagr:  benchmarkCAGR(date1yr, todayStr),
-        });
-      }
+      // Update CAGR rows with benchmark
+      setCagrRows(prev => prev.map(row => {
+        const fromDate = row.label === "Since Inception" ? firstTxDate
+          : row.label === "3-Year" ? `${currentYear - 3}-12-31`
+          : `${lastFullYear}-12-31`;
+        return { ...row, benchmarkCagr: benchmarkCAGR(fromDate, todayStr) };
+      }));
 
-      setCagrRows(cagrResults);
+      setBenchmarkSymbol(symbol);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
-      setLoading(false);
+      setLoadingBenchmark(false);
     }
   }
 
@@ -277,6 +293,8 @@ export default function Benchmarking() {
     paddingBottom: "12px",
     borderBottom: `1px solid rgba(200,169,106,0.15)`,
   };
+
+  const hasBenchmark = benchmarkSymbol !== null;
 
   return (
     <div style={{ maxWidth: "960px" }}>
@@ -292,11 +310,11 @@ export default function Benchmarking() {
 
       {/* Benchmark input */}
       <div style={{ ...sectionStyle, marginBottom: "28px", display: "flex", alignItems: "center", gap: "16px" }}>
-        <span style={labelStyle}>Benchmark</span>
+        <span style={labelStyle}>Compare vs</span>
         <input
           value={benchmarkInput}
           onChange={e => setBenchmarkInput(e.target.value.toUpperCase())}
-          onKeyDown={e => { if (e.key === "Enter") setBenchmarkSymbol(benchmarkInput); }}
+          onKeyDown={e => { if (e.key === "Enter") loadBenchmark(benchmarkInput.trim()); }}
           style={{
             background: "rgba(255,255,255,0.05)",
             border: `1px solid ${C.border}`,
@@ -311,7 +329,7 @@ export default function Benchmarking() {
           placeholder="e.g. SPY"
         />
         <button
-          onClick={() => setBenchmarkSymbol(benchmarkInput)}
+          onClick={() => loadBenchmark(benchmarkInput.trim())}
           style={{
             background: C.gold,
             color: "#0B1020",
@@ -325,11 +343,71 @@ export default function Benchmarking() {
             letterSpacing: "0.04em",
           }}
         >
-          Load
+          Compare
         </button>
-        {loading && <span style={{ color: C.muted, fontSize: "13px" }}>Loading…</span>}
+        {hasBenchmark && (
+          <button
+            onClick={() => {
+              setBenchmarkSymbol(null);
+              setChartData(prev => prev.map(({ benchmark: _b, ...rest }) => rest));
+              setYearRows(prev => prev.map(r => ({ ...r, benchmarkPct: null })));
+              setCagrRows(prev => prev.map(r => ({ ...r, benchmarkCagr: null })));
+            }}
+            style={{
+              background: "transparent",
+              color: C.muted,
+              border: `1px solid ${C.border}`,
+              borderRadius: "8px",
+              fontFamily: C.font,
+              fontSize: "14px",
+              padding: "8px 16px",
+              cursor: "pointer",
+            }}
+          >
+            Clear
+          </button>
+        )}
+        {(loadingPortfolio || loadingBenchmark) && <span style={{ color: C.muted, fontSize: "13px" }}>Loading…</span>}
         {error && <span style={{ color: C.red, fontSize: "13px" }}>{error}</span>}
       </div>
+
+      {/* Chart */}
+      {chartData.length > 0 && (
+        <div style={{ ...sectionStyle, marginBottom: "28px" }}>
+          <p style={{ ...labelStyle, margin: "0 0 20px" }}>CAGR Since Inception (%)</p>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="rgba(200,169,106,0.08)" vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={48} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(value: number, name: string) => [
+                  `${value > 0 ? "+" : ""}${value}%`,
+                  name === "portfolio" ? "Portfolio" : benchmarkSymbol ?? name,
+                ]}
+                labelFormatter={l => l}
+              />
+              <Line type="monotone" dataKey="portfolio" stroke={C.green} strokeWidth={2} dot={{ r: 3, fill: C.green }} name="portfolio" />
+              {hasBenchmark && (
+                <Line type="monotone" dataKey="benchmark" stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: "#60a5fa" }} strokeDasharray="5 3" name="benchmark" />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{ display: "flex", gap: "24px", marginTop: "12px" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: C.muted }}>
+              <span style={{ width: "16px", height: "2px", background: C.green, display: "inline-block" }} />
+              Portfolio
+            </span>
+            {hasBenchmark && (
+              <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: C.muted }}>
+                <span style={{ width: "16px", height: "2px", background: "#60a5fa", display: "inline-block" }} />
+                {benchmarkSymbol}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Year-by-year table */}
       <div style={{ ...sectionStyle, marginBottom: "28px" }}>
@@ -337,32 +415,29 @@ export default function Benchmarking() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Year", "Portfolio Value", "Portfolio %", `${benchmarkSymbol} %`, "Difference"].map(h => (
+              {["Year", "Portfolio Value", "Portfolio %", ...(hasBenchmark ? [`${benchmarkSymbol} %`, "Difference"] : [])].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {yearRows.length === 0 && !loading && (
+            {yearRows.length === 0 && !loadingPortfolio && (
               <tr>
-                <td colSpan={5} style={{ ...tableCellStyle, color: C.muted, textAlign: "center", paddingTop: "32px" }}>
+                <td colSpan={hasBenchmark ? 5 : 3} style={{ ...tableCellStyle, color: C.muted, textAlign: "center", paddingTop: "32px" }}>
                   No data available
                 </td>
               </tr>
             )}
             {yearRows.map(row => {
               const diff = row.portfolioPct !== null && row.benchmarkPct !== null
-                ? row.portfolioPct - row.benchmarkPct
-                : null;
+                ? row.portfolioPct - row.benchmarkPct : null;
               return (
                 <tr key={String(row.year)}>
                   <td style={{ ...tableCellStyle, color: C.gold }}>{row.year}</td>
                   <td style={tableCellStyle}>{fmtVal(row.portfolioValue)}</td>
                   <td style={{ ...tableCellStyle, color: diffColor(row.portfolioPct) }}>{fmtPct(row.portfolioPct)}</td>
-                  <td style={tableCellStyle}>{fmtPct(row.benchmarkPct)}</td>
-                  <td style={{ ...tableCellStyle, color: diffColor(diff), fontWeight: diff !== null ? 600 : 400 }}>
-                    {fmtPct(diff)}
-                  </td>
+                  {hasBenchmark && <td style={tableCellStyle}>{fmtPct(row.benchmarkPct)}</td>}
+                  {hasBenchmark && <td style={{ ...tableCellStyle, color: diffColor(diff), fontWeight: diff !== null ? 600 : 400 }}>{fmtPct(diff)}</td>}
                 </tr>
               );
             })}
@@ -376,7 +451,7 @@ export default function Benchmarking() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Period", "Portfolio CAGR", `${benchmarkSymbol} CAGR`, "Alpha"].map(h => (
+              {["Period", "Portfolio CAGR", ...(hasBenchmark ? [`${benchmarkSymbol} CAGR`, "Alpha"] : [])].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
@@ -384,18 +459,13 @@ export default function Benchmarking() {
           <tbody>
             {cagrRows.map(row => {
               const alpha = row.portfolioCagr !== null && row.benchmarkCagr !== null
-                ? row.portfolioCagr - row.benchmarkCagr
-                : null;
+                ? row.portfolioCagr - row.benchmarkCagr : null;
               return (
                 <tr key={row.label}>
                   <td style={{ ...tableCellStyle, color: C.gold }}>{row.label}</td>
-                  <td style={{ ...tableCellStyle, color: diffColor(row.portfolioCagr) }}>
-                    {fmtPct(row.portfolioCagr)}
-                  </td>
-                  <td style={tableCellStyle}>{fmtPct(row.benchmarkCagr)}</td>
-                  <td style={{ ...tableCellStyle, color: diffColor(alpha), fontWeight: 600 }}>
-                    {fmtPct(alpha)}
-                  </td>
+                  <td style={{ ...tableCellStyle, color: diffColor(row.portfolioCagr) }}>{fmtPct(row.portfolioCagr)}</td>
+                  {hasBenchmark && <td style={tableCellStyle}>{fmtPct(row.benchmarkCagr)}</td>}
+                  {hasBenchmark && <td style={{ ...tableCellStyle, color: diffColor(alpha), fontWeight: 600 }}>{fmtPct(alpha)}</td>}
                 </tr>
               );
             })}

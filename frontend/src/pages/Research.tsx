@@ -2,11 +2,16 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, ReferenceLine, BarChart, Bar, Cell, Legend, LabelList,
+  CartesianGrid, ReferenceLine, BarChart, Bar, Cell,
 } from "recharts";
 import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tooltipStyle, pillStyle, tableCellStyle } from "../theme";
 import { Nasdaq100SyncWidget } from "../components/Nasdaq100SyncWidget";
+
+function fmt$(v: number): string {
+  const abs = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (v < 0 ? "-$" : "$") + abs;
+}
 
 const MODELS = ["DCF", "OWNER_EARNINGS", "PEG", "GRAHAM", "DDM"] as const;
 type Model = typeof MODELS[number];
@@ -16,8 +21,14 @@ const MODEL_LABELS: Record<Model, string> = {
   OWNER_EARNINGS: "Owner Earnings (FCF)",
   PEG:            "PEG Ratio (Peter Lynch)",
   GRAHAM:         "Graham Number",
-  CRYPTO_RISK:    "Crypto Risk-Adjusted",
   DDM:            "Dividend Discount (DDM)",
+};
+
+// Extended labels for legacy model types that may appear in saved scenarios
+const MODEL_LABELS_EXT: Record<string, string> = {
+  ...MODEL_LABELS,
+  CRYPTO_RISK:  "Crypto Risk-Adjusted",
+  EPS_MULTIPLE: "EPS Multiple",
 };
 
 export default function Research() {
@@ -35,8 +46,9 @@ export default function Research() {
   const [dcaAddAmount, setDcaAddAmount] = useState("1000");
   const [activeIVLines, setActiveIVLines] = useState<Set<string>>(new Set());
   const [showIVToggles, setShowIVToggles] = useState(false);
-  const [valView, setValView]             = useState<"compare" | "trend">("compare");
   const [txFilter, setTxFilter]           = useState<"all" | "buy" | "sell">("all");
+  const [presetsError, setPresetsError]   = useState<string | null>(null);
+  const [dcaLoading, setDcaLoading]       = useState(false);
   const [lotSort, setLotSort]             = useState<{ col: string; dir: "asc" | "desc" }>({ col: "acquisitionDate", dir: "asc" });
   const [formVals, setFormVals]         = useState({
     currentPrice: "", earningsPerShare: "", freeCashFlowPerShare: "",
@@ -75,6 +87,11 @@ export default function Research() {
     setDetail(null);
     setPrices([]);
     setPriceRange("1y");
+    setShowForm(false);
+    setValuationError(null);
+    setPresetsError(null);
+    setActiveIVLines(new Set());
+    setShowIVToggles(false);
     setSearchParams({ symbol });
 
     fetch(`${API}/assets/${symbol}/detail`)
@@ -107,8 +124,11 @@ export default function Research() {
     fetch(`${API}/historical-prices/${symbol}`)
       .then(r => r.json()).then(d => setPrices(Array.isArray(d) ? d : [])).catch(console.error);
 
+    setDcaRec(null);
+    setDcaLoading(true);
     fetch(`${API}/dca/${symbol}/recommendation?availableCash=${dcaCash}`)
-      .then(r => r.json()).then(setDcaRec).catch(console.error);
+      .then(r => r.json()).then(setDcaRec).catch(console.error)
+      .finally(() => setDcaLoading(false));
 
     fetch(`${API}/financials/${symbol}`)
       .then(r => r.json()).then(d => setFinancials({ annual: d?.annual ?? [], quarterly: d?.quarterly ?? [] })).catch(console.error);
@@ -140,8 +160,11 @@ export default function Research() {
 
   const refreshDCA = (cash: string) => {
     if (!symbol) return;
+    setDcaRec(null);
+    setDcaLoading(true);
     fetch(`${API}/dca/${symbol}/recommendation?availableCash=${cash}`)
-      .then(r => r.json()).then(setDcaRec).catch(console.error);
+      .then(r => r.json()).then(setDcaRec).catch(console.error)
+      .finally(() => setDcaLoading(false));
   };
 
   const [financials, setFinancials]   = useState<{ annual: any[], quarterly: any[] }>({ annual: [], quarterly: [] });
@@ -169,6 +192,8 @@ export default function Research() {
       setDetail(newDetail);
       const finRows = { annual: newFin?.annual ?? [], quarterly: newFin?.quarterly ?? [] };
       setFinancials(finRows);
+      // Refresh DCA recommendation with latest price
+      refreshDCA(dcaCash);
       setSyncMsg(finRows.annual.length > 0
         ? `Synced: ${data.historicalPricesSynced} price bars, profile + metrics + financials updated.`
         : `Synced: ${data.historicalPricesSynced} price bars, profile + metrics updated, no financial data for this symbol.`
@@ -226,6 +251,7 @@ export default function Research() {
       // Reload detail to pick up new scenario
       const updated = await fetch(`${API}/assets/${symbol}/detail`).then(r => r.json());
       setDetail(updated);
+      setPresetsError(null);
       setShowForm(false);
     } catch (e: any) {
       setValuationError(e.message ?? "Calculation failed");
@@ -237,10 +263,14 @@ export default function Research() {
 
   const handleRunPresets = async () => {
     if (!symbol || !formVals.currentPrice) return;
-    if (!formVals.earningsPerShare && !formVals.freeCashFlowPerShare) return;
+    if (!formVals.earningsPerShare && !formVals.freeCashFlowPerShare) {
+      setPresetsError("Enter EPS or FCF per Share before running presets.");
+      return;
+    }
     setSubmitting(true);
+    setPresetsError(null);
     try {
-      await fetch(`${API}/valuations/presets`, {
+      const presetsRes = await fetch(`${API}/valuations/presets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -252,10 +282,13 @@ export default function Research() {
         }),
         // Note: presets use hardcoded terminal growth rates and exit multiples server-side
       });
+      if (!presetsRes.ok) throw new Error(await presetsRes.text());
       const updated = await fetch(`${API}/assets/${symbol}/detail`).then(r => r.json());
       setDetail(updated);
+      setValuationError(null);
       setShowForm(false);
-    } catch (e) {
+    } catch (e: any) {
+      setPresetsError(e.message ?? "Preset run failed");
       console.error(e);
     } finally {
       setSubmitting(false);
@@ -273,7 +306,6 @@ export default function Research() {
   const latestVal      = baseCase ?? scenarios.find((s: any) => s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM") ?? scenarios[0];
   const buyBelow       = latestVal ? Number(latestVal.intrinsicValue) * (1 - targetMos / 100) : 0;
   const taxLots        = detail?.taxLots ?? [];
-  const allocations    = detail?.taxLotAllocations ?? [];
   const assetTx        = detail?.transactions ?? [];
   const holding        = detail?.holding;
   const avgCost        = holding ? Number(holding.averageCostBasis) : null;
@@ -295,7 +327,7 @@ export default function Research() {
   };
   const ivLines = (detail?.valuationScenarios ?? []).map((s: any) => ({
     key:   `${s.modelType}_${s.caseType}`,
-    label: `${(MODEL_LABELS as any)[s.modelType] ?? s.modelType} · ${s.caseType}`,
+    label: `${MODEL_LABELS_EXT[s.modelType] ?? s.modelType} · ${s.caseType}`,
     iv:    Number(s.intrinsicValue),
     color: IV_MODEL_COLORS[s.modelType] ?? "#94a3b8",
     dash:  IV_CASE_DASH[s.caseType]    ?? "6 3",
@@ -318,53 +350,11 @@ export default function Research() {
     return all.filter(p => new Date(p.date + "T00:00:00") >= cutoff);
   })();
 
-  const valTrendData = [...scenarios].reverse().slice(0, 10).map((s: any) => ({
-    date: new Date(s.createdAt).toLocaleDateString(),
-    intrinsicValue: Number(s.intrinsicValue ?? 0),
-    case: s.caseType,
-  }));
-
   // Model comparison: latest scenario per model type
   const latestByModel: Record<string, any> = {};
   for (const s of scenarios) {
     if (!latestByModel[s.modelType]) latestByModel[s.modelType] = s;
   }
-  const modelComparisonData = Object.values(latestByModel).map((s: any) => ({
-    model:  (MODEL_LABELS as any)[s.modelType] ?? s.modelType,
-    iv:     Number(s.intrinsicValue ?? 0),
-    mos:    Number(s.marginOfSafetyPercent ?? 0),
-    label:  s.valuationLabel,
-    caseType: s.caseType,
-  }));
-
-  // Trend: one series per model, chronological
-  const trendByModel: Record<string, { date: string; iv: number }[]> = {};
-  for (const s of [...scenarios].reverse()) {
-    const key = s.modelType;
-    if (!trendByModel[key]) trendByModel[key] = [];
-    trendByModel[key].push({ date: new Date(s.createdAt).toLocaleDateString(), iv: Number(s.intrinsicValue ?? 0) });
-  }
-  const TREND_COLORS: Record<string, string> = {
-    DCF:            "#60a5fa",
-    OWNER_EARNINGS: "#a78bfa",
-    PEG:            "#34d399",
-    GRAHAM:         "#fb923c",
-    DDM:            "#f472b6",
-    CRYPTO_RISK:    "#94a3b8",
-    EPS_MULTIPLE:   "#facc15",
-  };
-  // Merge all dates across models for a unified X axis
-  const allTrendDates = [...new Set(
-    Object.values(trendByModel).flatMap(pts => pts.map(p => p.date))
-  )];
-  const mergedTrendData = allTrendDates.map(date => {
-    const row: Record<string, any> = { date };
-    for (const [model, pts] of Object.entries(trendByModel)) {
-      const pt = pts.find(p => p.date === date);
-      if (pt) row[model] = pt.iv;
-    }
-    return row;
-  });
 
   const inputStyle: React.CSSProperties = {
     background: C.bg,
@@ -472,11 +462,11 @@ export default function Research() {
           </div>
 
           {/* Metric cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(8,1fr)", gap: "16px", marginBottom: "32px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "10px", marginBottom: "32px" }}>
             {[
               { label: "Position Value", value: holding ? `$${Number(holding.marketValue).toLocaleString("en-US",{minimumFractionDigits:2})}` : "Not held" },
               { label: "Unrealized Gain",
-                value: holding ? `${Number(holding.unrealizedGain) >= 0 ? "+" : ""}$${Number(holding.unrealizedGain).toLocaleString("en-US",{minimumFractionDigits:2})}` : "—",
+                value: holding ? `${Number(holding.unrealizedGain) >= 0 ? "+" : ""}${fmt$(Number(holding.unrealizedGain))}` : "—",
                 color: holding ? (Number(holding.unrealizedGain) >= 0 ? C.green : C.red) : C.text,
                 sub: holding ? `${Number(holding.unrealizedGainPercent) >= 0 ? "+" : ""}${Number(holding.unrealizedGainPercent).toFixed(2)}%` : undefined,
               },
@@ -487,26 +477,26 @@ export default function Research() {
               { label: "Margin of Safety", value: latestVal ? `${Number(latestVal.marginOfSafetyPercent).toFixed(2)}%` : "—",
                 color: latestVal ? (Number(latestVal.marginOfSafetyPercent) >= 20 ? C.green : Number(latestVal.marginOfSafetyPercent) >= 0 ? C.gold : C.red) : C.text },
             ].map(({ label, value, color, sub }: any) => (
-              <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
-                <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
-                <h3 style={{ fontSize: "26px", marginTop: "14px", marginBottom: 0, color: color ?? C.text }}>{value}</h3>
-                {sub && <p style={{ color: color ?? C.muted, fontSize: "13px", margin: "4px 0 0" }}>{sub}</p>}
+              <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "14px", padding: "14px 16px" }}>
+                <p style={{ color: C.muted, fontSize: "11px", margin: 0 }}>{label}</p>
+                <h3 style={{ fontSize: "18px", marginTop: "8px", marginBottom: 0, color: color ?? C.text }}>{value}</h3>
+                {sub && <p style={{ color: color ?? C.muted, fontSize: "12px", margin: "3px 0 0" }}>{sub}</p>}
               </div>
             ))}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px" }}>
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "14px", padding: "14px 16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>Buy Below</p>
+                <p style={{ color: C.muted, fontSize: "11px", margin: 0 }}>Buy Below</p>
                 <div style={{ display: "flex", alignItems: "center", gap: "3px", marginLeft: "auto" }}>
                   <input type="number" min={0} max={90} value={targetMos}
                     onChange={e => setTargetMos(Number(e.target.value))}
-                    style={{ width: "44px", background: "transparent", color: C.gold,
+                    style={{ width: "40px", background: "transparent", color: C.gold,
                       border: `1px solid rgba(200,169,106,0.4)`, borderRadius: "6px",
-                      padding: "2px 6px", fontFamily: C.font, fontSize: "12px",
+                      padding: "2px 5px", fontFamily: C.font, fontSize: "11px",
                       textAlign: "center" }} />
-                  <span style={{ color: C.muted, fontSize: "12px" }}>% MOS</span>
+                  <span style={{ color: C.muted, fontSize: "11px" }}>% MOS</span>
                 </div>
               </div>
-              <h3 style={{ fontSize: "26px", marginTop: "14px", marginBottom: 0, color: C.text }}>
+              <h3 style={{ fontSize: "18px", marginTop: "8px", marginBottom: 0, color: C.text }}>
                 {latestVal ? `$${buyBelow.toFixed(2)}` : "—"}
               </h3>
             </div>
@@ -1010,7 +1000,7 @@ export default function Research() {
                   </div>
                   <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
                     <p style={{ margin: 0 }}>P/E ÷ EPS Growth Rate</p>
-                    <p style={{ margin: "4px 0 0" }}>P/E: {(Number(pegScenario.currentPrice) / Number(pegScenario.earningsPerShare)).toFixed(1)}x</p>
+                    <p style={{ margin: "4px 0 0" }}>P/E: {Number(pegScenario.earningsPerShare) !== 0 ? `${(Number(pegScenario.currentPrice) / Number(pegScenario.earningsPerShare)).toFixed(1)}x` : "—"}</p>
                     <p style={{ margin: "4px 0 0" }}>Growth: {pegScenario.growthRatePercent}%</p>
                     <p style={{ margin: "4px 0 0", fontSize: "11px" }}>{"< 1 undervalued · 1–2 fair · > 2 overvalued"}</p>
                   </div>
@@ -1072,7 +1062,7 @@ export default function Research() {
             {bearCase && bullCase && (() => {
               const lo  = Number(bearCase.intrinsicValue);
               const hi  = Number(bullCase.intrinsicValue);
-              const cur = Number(detail?.holding?.marketPrice ?? bearCase.currentPrice ?? 0);
+              const cur = Number(detail?.latestPrice ?? detail?.holding?.marketPrice ?? bearCase.currentPrice ?? 0);
               if (!lo || !hi || lo >= hi) return null;
 
               const clampPct = (v: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
@@ -1221,7 +1211,7 @@ export default function Research() {
                         fontFamily: C.font, fontSize: "12px", color: C.text, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
                       }}>
                         <div style={{ marginBottom: "8px", color: C.muted, fontWeight: 600, letterSpacing: "0.05em", fontSize: "11px" }}>
-                          PRESET ASSUMPTIONS (EPS-based, 10 yrs)
+                          PRESET ASSUMPTIONS ({model === "OWNER_EARNINGS" ? "FCF/share" : "EPS"}-based, 10 yrs)
                         </div>
                         <table style={{ borderCollapse: "collapse", width: "100%" }}>
                           <thead>
@@ -1258,6 +1248,9 @@ export default function Research() {
                   {valuationError && (
                     <p style={{ color: C.red, fontSize: "13px", marginTop: "12px" }}>{valuationError}</p>
                   )}
+                  {presetsError && (
+                    <p style={{ color: C.red, fontSize: "13px", marginTop: "12px" }}>{presetsError}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -1273,7 +1266,8 @@ export default function Research() {
 
             // Best valuation scenario (highest IV from most-recent base, or first)
             const scenarios: any[] = detail?.valuationScenarios ?? [];
-            const bestScenario = scenarios.find((s: any) => s.caseType === "BASE") ?? scenarios[0] ?? null;
+            const dcaScenarios = scenarios.filter((s: any) => s.modelType !== "PEG" && s.modelType !== "GRAHAM");
+            const bestScenario = dcaScenarios.find((s: any) => s.caseType === "BASE") ?? dcaScenarios[0] ?? null;
             const intrinsicValue = bestScenario ? Number(bestScenario.intrinsicValue) : null;
 
             // Average Down Calculator
@@ -1314,7 +1308,9 @@ export default function Research() {
                   </div>
                 </div>
 
-                {!dcaRec
+                {dcaLoading
+                  ? <p style={{ color: C.gold, fontSize: "13px" }}>Loading recommendation…</p>
+                  : !dcaRec
                   ? <p style={{ color: C.muted }}>Run a valuation scenario first to unlock DCA recommendations.</p>
                   : <>
                       {/* ── Recommendation card ── */}
@@ -1329,7 +1325,7 @@ export default function Research() {
                                   <span style={{ padding: "5px 18px", borderRadius: "999px", fontSize: "13px", fontWeight: 700,
                                     background: rec.action === "BUY_MORE" ? "rgba(143,214,148,0.12)" : rec.action === "REDUCE" ? "rgba(224,108,117,0.12)" : "rgba(200,169,106,0.12)",
                                     color: actionColor }}>
-                                    {rec.action.replace("_", " ")}
+                                    {rec.action.replaceAll("_", " ")}
                                   </span>
                                   <span style={{ color: C.muted, fontSize: "13px" }}>{rec.confidenceScore}% confidence</span>
                                 </div>
@@ -1389,7 +1385,7 @@ export default function Research() {
                                   color: avgCostDelta < 0 ? C.green : avgCostDelta > 0 ? C.red : C.muted },
                                 { label: "New Shares",       val: newQty > 0 ? newQty.toFixed(4) : "—",
                                   sub: `+${boughtShares.toFixed(4)} shares`, color: C.muted },
-                                { label: "Unrealized P&L",   val: newUnrealPnl !== 0 ? `${newUnrealPnl >= 0 ? "+" : ""}$${newUnrealPnl.toFixed(2)}` : "—",
+                                { label: "Unrealized P&L",   val: newUnrealPnl !== 0 ? `${newUnrealPnl >= 0 ? "+" : ""}${fmt$(newUnrealPnl)}` : "—",
                                   sub: `${newUnrealPct >= 0 ? "+" : ""}${newUnrealPct.toFixed(2)}%`,
                                   color: newUnrealPnl >= 0 ? C.green : C.red },
                                 { label: "Total Cost Basis", val: `$${newCostBasis.toFixed(2)}`,
@@ -1426,9 +1422,6 @@ export default function Research() {
                               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 {targets.map(t => {
                                   const isBelowCurrent = currentPrice > 0 && currentPrice <= t.price;
-                                  const isCurrentMOS   = currentPrice > 0
-                                    && intrinsicValue > 0
-                                    && Math.abs(((intrinsicValue - currentPrice) / intrinsicValue) * 100 - t.mos) < 5;
                                   const barPct = currentPrice > 0 ? Math.min(100, (currentPrice / t.price) * 100) : 0;
                                   return (
                                     <div key={t.mos} style={{ padding: "12px 16px", borderRadius: "10px",
@@ -1510,7 +1503,7 @@ export default function Research() {
                         return (
                           <tr key={s.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
                             <td style={{ ...tableCellStyle, fontWeight: 600 }}>
-                              {(MODEL_LABELS as any)[s.modelType] ?? s.modelType}
+                              {MODEL_LABELS_EXT[s.modelType] ?? s.modelType}
                             </td>
                             <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
                               {s.caseType ?? "—"}
@@ -1610,7 +1603,7 @@ export default function Research() {
                     background: totalRealizedGain >= 0 ? "rgba(143,214,148,0.06)" : "rgba(224,108,117,0.06)",
                     color: totalRealizedGain >= 0 ? C.green : C.red }}>
                     Realized Gain&nbsp;&nbsp;
-                    <strong>{totalRealizedGain >= 0 ? "+" : ""}${totalRealizedGain.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                    <strong>{totalRealizedGain >= 0 ? "+" : ""}{fmt$(totalRealizedGain)}</strong>
                   </div>
                   {hasAnyFees && (
                     <div style={{ padding: "8px 18px", borderRadius: "999px", fontSize: "13px",
@@ -1637,13 +1630,13 @@ export default function Research() {
                           const gain = Number(tx.realizedGain ?? 0);
                           return (
                             <tr key={tx.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
-                              <td style={tableCellStyle}>{tx.transactionDate}</td>
+                              <td style={tableCellStyle}>{new Date(tx.transactionDate + "T00:00:00").toLocaleDateString()}</td>
                               <td style={tableCellStyle}><span style={pillStyle(tx.transactionType)}>{tx.transactionType}</span></td>
                               <td style={tableCellStyle}>{Number(tx.quantity).toFixed(4)}</td>
                               <td style={tableCellStyle}>${Number(tx.pricePerUnit).toFixed(2)}</td>
                               {hasAnyFees && <td style={{ ...tableCellStyle, color: C.muted }}>${Number(tx.fees).toFixed(2)}</td>}
                               <td style={{ ...tableCellStyle, color: sell ? (gain >= 0 ? C.green : C.red) : C.muted }}>
-                                {sell ? `${gain >= 0 ? "+" : ""}$${gain.toFixed(2)}` : "—"}
+                                {sell ? `${gain >= 0 ? "+" : ""}${fmt$(gain)}` : "—"}
                               </td>
                             </tr>
                           );
@@ -1709,7 +1702,7 @@ export default function Research() {
                       ? <tr><td colSpan={6} style={{ padding: "20px 0", color: C.muted }}>No tax lots.</td></tr>
                       : sortedLots.map((lot: any) => (
                           <tr key={lot.id} style={{ borderTop: `1px solid ${C.borderSubtle}` }}>
-                            <td style={tableCellStyle}>{lot.acquisitionDate}</td>
+                            <td style={tableCellStyle}>{new Date(lot.acquisitionDate + "T00:00:00").toLocaleDateString()}</td>
                             <td style={tableCellStyle}>{Number(lot.quantityPurchased).toFixed(4)}</td>
                             <td style={tableCellStyle}>{Number(lot.quantityRemaining).toFixed(4)}</td>
                             <td style={tableCellStyle}>${Number(lot.costBasisPerUnit).toFixed(2)}</td>

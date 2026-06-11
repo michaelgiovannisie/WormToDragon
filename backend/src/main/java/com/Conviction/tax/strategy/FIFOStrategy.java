@@ -62,6 +62,7 @@ public class FIFOStrategy implements TaxStrategy {
             lot.setQuantityRemaining(lot.getQuantityRemaining().subtract(fromLot));
             if (lot.getQuantityRemaining().compareTo(BigDecimal.ZERO) == 0) {
                 lot.setClosed(true);
+                lot.setClosedDate(sellTransaction.getTransactionDate());
             }
 
             quantityToSell = quantityToSell.subtract(fromLot);

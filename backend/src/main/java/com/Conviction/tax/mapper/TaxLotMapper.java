@@ -24,6 +24,7 @@ public class TaxLotMapper {
                 lot.getTotalCostBasis(),
                 lot.getAcquisitionDate(),
                 lot.getClosed(),
+                lot.getClosedDate(),
                 lot.getCreatedAt()
         );
     }
@@ -40,6 +41,7 @@ public class TaxLotMapper {
                 allocation.getProceeds(),
                 allocation.getCostBasis(),
                 allocation.getRealizedGain(),
+                allocation.getSellTransaction().getTransactionDate(),
                 allocation.getCreatedAt()
         );
     }

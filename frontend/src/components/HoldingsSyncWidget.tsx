@@ -6,8 +6,8 @@ import { useHoldingsSync } from "../hooks/useHoldingsSync";
  * Mount on Dashboard and Holdings — state is derived from the backend,
  * so both pages show the same live progress.
  */
-export function HoldingsSyncWidget() {
-  const { status, starting, start } = useHoldingsSync();
+export function HoldingsSyncWidget({ onComplete }: { onComplete?: () => void } = {}) {
+  const { status, starting, start } = useHoldingsSync(onComplete);
 
   const containerStyle: React.CSSProperties = {
     display: "flex",

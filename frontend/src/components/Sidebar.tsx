@@ -6,9 +6,9 @@ const NAV = [
   { to: "/holdings",  label: "Holdings"  },
   { to: "/research",  label: "Research"  },
 
+  { to: "/benchmarking", label: "Benchmarking" },
   { to: "/tax",       label: "Tax"       },
   { to: "/import",        label: "Import"       },
-  { to: "/benchmarking", label: "Benchmarking" },
 ];
 
 export default function Sidebar() {
