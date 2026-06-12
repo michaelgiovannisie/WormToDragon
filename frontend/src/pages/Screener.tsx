@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../constants";
 import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
@@ -44,9 +44,9 @@ const MARKET_CAP_TIERS: { label: string; more?: number; less?: number }[] = [
 ];
 
 const PIOTROSKI_OPTIONS = [
-  { label: "Any",            value: "" },
-  { label: "≥5 Average",    value: "5" },
-  { label: "≥7 Strong",     value: "7" },
+  { label: "Any",             value: "" },
+  { label: "≥5 Average",     value: "5" },
+  { label: "≥7 Strong",      value: "7" },
   { label: "≥8 Very Strong", value: "8" },
 ];
 
@@ -104,7 +104,7 @@ function peColor(v: number | null): string {
 
 function altmanColor(v: number | null): string {
   if (v == null) return C.muted;
-  if (v >= 3) return C.green;
+  if (v >= 3)    return C.green;
   if (v >= 1.81) return C.gold;
   return C.red;
 }
@@ -134,10 +134,108 @@ function useSortable<T>(rows: T[], defaultKey: keyof T) {
   return { sorted, sortKey: key, sortDir: dir, toggle };
 }
 
+// ── module-level styles ───────────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.05)",
+  border: `1px solid ${C.border}`,
+  borderRadius: "8px",
+  color: C.text,
+  fontFamily: C.font,
+  fontSize: "13px",
+  padding: "6px 10px",
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
+
+const groupLabel: React.CSSProperties = {
+  color: C.gold,
+  fontSize: "11px",
+  fontWeight: 600,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  margin: "0 0 10px",
+};
+
+const fieldLabel: React.CSSProperties = {
+  color: C.muted,
+  fontSize: "12px",
+  margin: "0 0 5px",
+};
+
+const thStyle: React.CSSProperties = {
+  color: C.muted,
+  fontSize: "12px",
+  fontWeight: 400,
+  textAlign: "left",
+  paddingBottom: "12px",
+  borderBottom: `1px solid rgba(200,169,106,0.15)`,
+  cursor: "pointer",
+  userSelect: "none",
+  whiteSpace: "nowrap",
+};
+
+// ── SortTh ────────────────────────────────────────────────────────────────
+
+function SortTh({
+  col, label, sortKey, sortDir, toggle,
+}: {
+  col: keyof ScreenerResult;
+  label: string;
+  sortKey: keyof ScreenerResult;
+  sortDir: SortDir;
+  toggle: (k: keyof ScreenerResult) => void;
+}) {
+  const active = sortKey === col;
+  return (
+    <th
+      style={{ ...thStyle, color: active ? C.gold : C.muted }}
+      onClick={() => toggle(col)}
+    >
+      {label}{active ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+    </th>
+  );
+}
+
+// ── FlagCheck: tri-state (null = omit, true = require, false = exclude) ───
+
+function FlagCheck({
+  label, value, onChange,
+}: { label: string; value: boolean | null; onChange: (v: boolean | null) => void }) {
+  function cycle() {
+    if (value === null) onChange(true);
+    else if (value)     onChange(false);
+    else                onChange(null);
+  }
+  const display = value === null ? "—" : value ? "✓" : "✗";
+  const color   = value === null ? C.muted : value ? C.green : C.red;
+  return (
+    <div
+      onClick={cycle}
+      style={{
+        display: "flex", alignItems: "center", gap: "8px",
+        cursor: "pointer", padding: "6px 10px",
+        border: `1px solid ${C.border}`, borderRadius: "8px",
+        background: "rgba(255,255,255,0.04)", userSelect: "none",
+        fontSize: "13px",
+      }}
+    >
+      <span style={{ color, fontWeight: 700, minWidth: "14px", textAlign: "center" }}>
+        {display}
+      </span>
+      <span style={{ color: C.text }}>{label}</span>
+    </div>
+  );
+}
+
 // ── component ──────────────────────────────────────────────────────────────
 
 export default function Screener() {
   const navigate = useNavigate();
+  const abortRef = useRef<AbortController | null>(null);
 
   // ── Universe ──
   const [exchange,  setExchange]  = useState("");
@@ -167,10 +265,10 @@ export default function Screener() {
   const [inclAllShareClasses, setInclAllShareClasses] = useState<boolean | null>(null);
 
   // ── Enrichment post-filters ──
-  const [maxPe,         setMaxPe]         = useState("");
-  const [minRoe,        setMinRoe]        = useState("");  // user enters %
-  const [minDivYield,   setMinDivYield]   = useState("");  // user enters %
-  const [minPiotroski,  setMinPiotroski]  = useState("");
+  const [maxPe,        setMaxPe]        = useState("");
+  const [minRoe,       setMinRoe]       = useState("");  // user enters %
+  const [minDivYield,  setMinDivYield]  = useState("");  // user enters %
+  const [minPiotroski, setMinPiotroski] = useState("");
 
   // ── Limit ──
   const [limit, setLimit] = useState("50");
@@ -183,12 +281,20 @@ export default function Screener() {
 
   const { sorted, sortKey, sortDir, toggle } = useSortable(results, "marketCap");
 
+  // Abort any in-flight request when the component unmounts
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
+
   async function runScreen() {
+    // Cancel any in-flight request before starting a new one
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
+
     setLoading(true);
     setError(null);
+    setResults([]);
 
     const tier = MARKET_CAP_TIERS[capTier];
-    setResults([]);   // clear stale results immediately
     const p = new URLSearchParams();
 
     // Universe
@@ -204,125 +310,53 @@ export default function Screener() {
     if (priceMax)  p.set("priceLowerThan", priceMax);
 
     // Beta / Volume
-    if (betaMin) p.set("betaMoreThan",   betaMin);
-    if (betaMax) p.set("betaLowerThan",  betaMax);
-    if (volMin)  p.set("volumeMoreThan", volMin);
-    if (volMax)  p.set("volumeLowerThan",volMax);
+    if (betaMin) p.set("betaMoreThan",    betaMin);
+    if (betaMax) p.set("betaLowerThan",   betaMax);
+    if (volMin)  p.set("volumeMoreThan",  volMin);
+    if (volMax)  p.set("volumeLowerThan", volMax);
 
     // Dividend (per-share, FMP-level)
     if (divMin) p.set("dividendMoreThan",  divMin);
     if (divMax) p.set("dividendLowerThan", divMax);
 
-    // Flags
-    if (isEtf !== null)               p.set("isEtf",               String(isEtf));
-    if (isFund !== null)              p.set("isFund",              String(isFund));
-    if (isActivelyTrading !== null)   p.set("isActivelyTrading",   String(isActivelyTrading));
+    // Flags — only send when explicitly set; null = omit (let FMP include all)
+    if (isEtf               !== null) p.set("isEtf",                 String(isEtf));
+    if (isFund              !== null) p.set("isFund",                String(isFund));
+    if (isActivelyTrading   !== null) p.set("isActivelyTrading",     String(isActivelyTrading));
     if (inclAllShareClasses !== null) p.set("includeAllShareClasses", String(inclAllShareClasses));
 
-    // Enrichment
-    if (maxPe)       p.set("maxPeRatio",       maxPe);
-    if (minRoe)      p.set("minRoe",           String(Number(minRoe) / 100));
-    if (minDivYield) p.set("minDividendYield", String(Number(minDivYield) / 100));
-    if (minPiotroski) p.set("minPiotroski",    minPiotroski);
+    // Enrichment post-filters
+    if (maxPe)        p.set("maxPeRatio",       maxPe);
+    if (minRoe)       p.set("minRoe",           String(Number(minRoe) / 100));
+    if (minDivYield)  p.set("minDividendYield", String(Number(minDivYield) / 100));
+    if (minPiotroski) p.set("minPiotroski",     minPiotroski);
 
-    p.set("limit", limit || "50");
+    // Limit: clamp 1–200
+    const limitNum = Math.max(1, Math.min(Number(limit) || 50, 200));
+    p.set("limit", String(limitNum));
 
+    let wasAborted = false;
     try {
-      const res = await fetch(`${API}/fmp/screener/full?${p.toString()}`);
-      if (!res.ok) throw new Error(await res.text());
+      const res = await fetch(`${API}/fmp/screener/full?${p.toString()}`, { signal });
+      if (!res.ok) throw new Error(`Server error ${res.status}: ${res.statusText}`);
       const data: ScreenerResult[] = await res.json();
       setResults(data);
-      setHasRun(true);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        wasAborted = true;
+        return;
+      }
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
-      setLoading(false);
+      // Skip state updates when this request was superseded by a newer one
+      if (!wasAborted) {
+        setHasRun(true);
+        setLoading(false);
+      }
     }
   }
 
-  // ── styles ───────────────────────────────────────────────────────────────
-
-  const inputStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.05)",
-    border: `1px solid ${C.border}`,
-    borderRadius: "8px",
-    color: C.text,
-    fontFamily: C.font,
-    fontSize: "13px",
-    padding: "6px 10px",
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box",
-  };
-
-  const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
-
-  const groupLabel: React.CSSProperties = {
-    color: C.gold,
-    fontSize: "11px",
-    fontWeight: 600,
-    letterSpacing: "0.1em",
-    textTransform: "uppercase",
-    margin: "0 0 10px",
-  };
-
-  const fieldLabel: React.CSSProperties = {
-    color: C.muted,
-    fontSize: "12px",
-    margin: "0 0 5px",
-  };
-
-  const th: React.CSSProperties = {
-    color: C.muted,
-    fontSize: "12px",
-    fontWeight: 400,
-    textAlign: "left",
-    paddingBottom: "12px",
-    borderBottom: `1px solid rgba(200,169,106,0.15)`,
-    cursor: "pointer",
-    userSelect: "none",
-    whiteSpace: "nowrap",
-  };
-
-  function SortTh({ col, label }: { col: keyof ScreenerResult; label: string }) {
-    const active = sortKey === col;
-    return (
-      <th style={{ ...th, color: active ? C.gold : C.muted }} onClick={() => toggle(col)}>
-        {label}{active ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-      </th>
-    );
-  }
-
-  // ── Flag tri-state: null = omit, true = checked, false = unchecked ────────
-  function FlagCheck({
-    label, value, onChange,
-  }: { label: string; value: boolean | null; onChange: (v: boolean | null) => void }) {
-    // Click cycles: null → true → false → null
-    function cycle() {
-      if (value === null)  onChange(true);
-      else if (value)      onChange(false);
-      else                 onChange(null);
-    }
-    const display = value === null ? "—" : value ? "✓" : "✗";
-    const color   = value === null ? C.muted : value ? C.green : C.red;
-    return (
-      <div
-        onClick={cycle}
-        style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          cursor: "pointer", padding: "6px 10px",
-          border: `1px solid ${C.border}`, borderRadius: "8px",
-          background: "rgba(255,255,255,0.04)", userSelect: "none",
-          fontSize: "13px",
-        }}
-      >
-        <span style={{ color, fontWeight: 700, minWidth: "14px", textAlign: "center" }}>
-          {display}
-        </span>
-        <span style={{ color: C.text }}>{label}</span>
-      </div>
-    );
-  }
+  const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter") runScreen(); };
 
   return (
     <div style={{ maxWidth: "1400px" }}>
@@ -363,8 +397,7 @@ export default function Screener() {
             <input
               type="text" placeholder="e.g. Software"
               value={industry} onChange={e => setIndustry(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -372,8 +405,7 @@ export default function Screener() {
             <input
               type="text" placeholder="e.g. US"
               value={country} onChange={e => setCountry(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
         </div>
@@ -392,8 +424,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="0"
               value={priceMin} onChange={e => setPriceMin(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -401,8 +432,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="∞"
               value={priceMax} onChange={e => setPriceMax(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -410,8 +440,7 @@ export default function Screener() {
             <input
               type="number" min={1} max={200} placeholder="50"
               value={limit} onChange={e => setLimit(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
         </div>
@@ -424,8 +453,7 @@ export default function Screener() {
             <input
               type="number" step={0.1} placeholder="0"
               value={betaMin} onChange={e => setBetaMin(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -433,8 +461,7 @@ export default function Screener() {
             <input
               type="number" step={0.1} placeholder="∞"
               value={betaMax} onChange={e => setBetaMax(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -442,8 +469,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="e.g. 1000000"
               value={volMin} onChange={e => setVolMin(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -451,8 +477,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="∞"
               value={volMax} onChange={e => setVolMax(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
         </div>
@@ -465,8 +490,7 @@ export default function Screener() {
             <input
               type="number" min={0} step={0.01} placeholder="0"
               value={divMin} onChange={e => setDivMin(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -474,31 +498,39 @@ export default function Screener() {
             <input
               type="number" min={0} step={0.01} placeholder="∞"
               value={divMax} onChange={e => setDivMax(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
         </div>
 
         {/* ── Flags ── */}
-        <p style={groupLabel}>Flags <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "11px" }}>(click to toggle: — ignore, ✓ require, ✗ exclude)</span></p>
+        <p style={groupLabel}>
+          Flags{" "}
+          <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "11px" }}>
+            (click to toggle: — ignore, ✓ require, ✗ exclude)
+          </span>
+        </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px" }}>
-          <FlagCheck label="ETF"                   value={isEtf}               onChange={setIsEtf} />
-          <FlagCheck label="Fund"                  value={isFund}             onChange={setIsFund} />
-          <FlagCheck label="Actively Trading"      value={isActivelyTrading}  onChange={setIsActivelyTrading} />
-          <FlagCheck label="All Share Classes"     value={inclAllShareClasses} onChange={setInclAllShareClasses} />
+          <FlagCheck label="ETF"              value={isEtf}               onChange={setIsEtf} />
+          <FlagCheck label="Fund"             value={isFund}              onChange={setIsFund} />
+          <FlagCheck label="Actively Trading" value={isActivelyTrading}   onChange={setIsActivelyTrading} />
+          <FlagCheck label="All Share Classes" value={inclAllShareClasses} onChange={setInclAllShareClasses} />
         </div>
 
-        {/* ── Enrichment post-filters ── */}
-        <p style={groupLabel}>Quality Filters <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "11px" }}>(applied after enrichment — slower)</span></p>
+        {/* ── Quality Filters ── */}
+        <p style={groupLabel}>
+          Quality Filters{" "}
+          <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "11px" }}>
+            (applied after enrichment — slower)
+          </span>
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
           <div>
             <p style={fieldLabel}>Max P/E</p>
             <input
               type="number" min={0} placeholder="e.g. 25"
               value={maxPe} onChange={e => setMaxPe(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -506,8 +538,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="e.g. 15"
               value={minRoe} onChange={e => setMinRoe(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -515,8 +546,7 @@ export default function Screener() {
             <input
               type="number" min={0} step={0.1} placeholder="e.g. 2"
               value={minDivYield} onChange={e => setMinDivYield(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
-              style={inputStyle}
+              onKeyDown={onEnter} style={inputStyle}
             />
           </div>
           <div>
@@ -555,7 +585,7 @@ export default function Screener() {
       <div style={sectionStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <p style={{ ...labelStyle, margin: 0 }}>Results</p>
-          {hasRun && (
+          {hasRun && !loading && !error && (
             <span style={{ color: C.muted, fontSize: "13px" }}>
               {results.length} {results.length === 1 ? "match" : "matches"}
             </span>
@@ -564,7 +594,7 @@ export default function Screener() {
 
         {loading && (
           <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
-            Screening… fetching fundamentals for each result, may take ~10s
+            Screening… fetching fundamentals for each result, may take ~10–20s
           </p>
         )}
 
@@ -574,9 +604,15 @@ export default function Screener() {
           </p>
         )}
 
-        {!loading && hasRun && results.length === 0 && (
+        {!loading && hasRun && results.length === 0 && !error && (
           <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
             No results matched your filters
+          </p>
+        )}
+
+        {!loading && hasRun && error && (
+          <p style={{ color: C.red, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
+            Screen failed — check your filters and try again
           </p>
         )}
 
@@ -585,21 +621,21 @@ export default function Screener() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1100px" }}>
               <thead>
                 <tr>
-                  <SortTh col="symbol"        label="Symbol" />
-                  <th style={th}>Company</th>
-                  <SortTh col="sector"        label="Sector" />
-                  <SortTh col="exchange"      label="Exch" />
-                  <SortTh col="price"         label="Price" />
-                  <SortTh col="marketCap"     label="Mkt Cap" />
-                  <SortTh col="beta"          label="Beta" />
-                  <SortTh col="peRatio"       label="P/E" />
-                  <SortTh col="pbRatio"       label="P/B" />
-                  <SortTh col="roe"           label="ROE" />
-                  <SortTh col="netMargin"     label="Net Margin" />
-                  <SortTh col="dividendYield" label="Div Yield" />
-                  <SortTh col="debtEquity"    label="D/E" />
-                  <SortTh col="piotroskiScore" label="Piotroski" />
-                  <SortTh col="altmanZScore"  label="Altman Z" />
+                  <SortTh col="symbol"        label="Symbol"     sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <th style={thStyle}>Company</th>
+                  <SortTh col="sector"        label="Sector"     sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="exchange"      label="Exch"       sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="price"         label="Price"      sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="marketCap"     label="Mkt Cap"    sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="beta"          label="Beta"       sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="peRatio"       label="P/E"        sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="pbRatio"       label="P/B"        sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="roe"           label="ROE"        sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="netMargin"     label="Net Margin" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="dividendYield" label="Div Yield"  sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="debtEquity"    label="D/E"        sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="piotroskiScore" label="Piotroski" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="altmanZScore"  label="Altman Z"   sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
                 </tr>
               </thead>
               <tbody>
@@ -628,13 +664,15 @@ export default function Screener() {
                     <td style={{ ...tableCellStyle, color: row.beta != null ? (Math.abs(row.beta) <= 1 ? C.green : Math.abs(row.beta) <= 1.5 ? C.gold : C.red) : C.muted }}>
                       {fmtNum(row.beta, 2)}
                     </td>
-                    <td style={{ ...tableCellStyle, color: peColor(row.peRatio) }}>
+                    <td style={{ ...tableCellStyle, color: row.peRatio != null && row.peRatio > 0 ? peColor(row.peRatio) : C.muted }}>
                       {row.peRatio != null && row.peRatio > 0 ? fmtRatio(row.peRatio) : "—"}
                     </td>
                     <td style={tableCellStyle}>
                       {row.pbRatio != null && row.pbRatio > 0 ? fmtRatio(row.pbRatio) : "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: roePctColor(row.roe) }}>{fmtPct(row.roe)}</td>
+                    <td style={{ ...tableCellStyle, color: roePctColor(row.roe) }}>
+                      {fmtPct(row.roe)}
+                    </td>
                     <td style={{ ...tableCellStyle, color: row.netMargin != null && row.netMargin > 0 ? C.green : row.netMargin != null ? C.red : C.muted }}>
                       {fmtPct(row.netMargin)}
                     </td>

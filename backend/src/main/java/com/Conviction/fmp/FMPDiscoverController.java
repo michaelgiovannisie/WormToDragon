@@ -105,8 +105,8 @@ public class FMPDiscoverController {
             @RequestParam(required = false) Double priceLowerThan,
             @RequestParam(required = false) Double betaMoreThan,
             @RequestParam(required = false) Double betaLowerThan,
-            @RequestParam(required = false) Double volumeMoreThan,
-            @RequestParam(required = false) Double volumeLowerThan,
+            @RequestParam(required = false) Long   volumeMoreThan,
+            @RequestParam(required = false) Long   volumeLowerThan,
             @RequestParam(required = false) Double dividendMoreThan,
             @RequestParam(required = false) Double dividendLowerThan,
             @RequestParam(required = false) Boolean isEtf,
@@ -136,10 +136,10 @@ public class FMPDiscoverController {
         if (volumeLowerThan       != null) { params.add("volumeLowerThan");       params.add(volumeLowerThan.toString()); }
         if (dividendMoreThan      != null) { params.add("dividendMoreThan");      params.add(dividendMoreThan.toString()); }
         if (dividendLowerThan     != null) { params.add("dividendLowerThan");     params.add(dividendLowerThan.toString()); }
-        // Booleans — only send if explicitly set, otherwise let FMP use its defaults
-        params.add("isEtf");            params.add(isEtf != null ? isEtf.toString() : "false");
-        params.add("isFund");           params.add(isFund != null ? isFund.toString() : "false");
-        params.add("isActivelyTrading"); params.add(isActivelyTrading != null ? isActivelyTrading.toString() : "true");
+        // Booleans — only send when explicitly set; null = omit so FMP returns all
+        if (isEtf               != null) { params.add("isEtf");                  params.add(isEtf.toString()); }
+        if (isFund              != null) { params.add("isFund");                 params.add(isFund.toString()); }
+        if (isActivelyTrading   != null) { params.add("isActivelyTrading");      params.add(isActivelyTrading.toString()); }
         if (includeAllShareClasses != null) { params.add("includeAllShareClasses"); params.add(includeAllShareClasses.toString()); }
         params.add("limit");             params.add(String.valueOf(Math.min(limit, 100)));
 
@@ -335,11 +335,6 @@ public class FMPDiscoverController {
 
     private String str(Map<String, Object> m, String key) {
         Object v = m.get(key); return v != null ? v.toString() : null;
-    }
-    /** Returns the value of the first key that exists and is non-null in the map. */
-    private Object firstNonNull(Map<String, Object> m, String... keys) {
-        for (String k : keys) { Object v = m.get(k); if (v != null) return v; }
-        return null;
     }
     private BigDecimal toBD(Object val) {
         if (val == null) return null;
