@@ -188,6 +188,7 @@ export default function Screener() {
     setError(null);
 
     const tier = MARKET_CAP_TIERS[capTier];
+    setResults([]);   // clear stale results immediately
     const p = new URLSearchParams();
 
     // Universe
@@ -362,14 +363,16 @@ export default function Screener() {
             <input
               type="text" placeholder="e.g. Software"
               value={industry} onChange={e => setIndustry(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
           <div>
             <p style={fieldLabel}>Country</p>
             <input
-              type="text" placeholder="e.g. US, GB, JP"
+              type="text" placeholder="e.g. US"
               value={country} onChange={e => setCountry(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -389,6 +392,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="0"
               value={priceMin} onChange={e => setPriceMin(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -397,6 +401,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="∞"
               value={priceMax} onChange={e => setPriceMax(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -405,6 +410,7 @@ export default function Screener() {
             <input
               type="number" min={1} max={200} placeholder="50"
               value={limit} onChange={e => setLimit(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -418,6 +424,7 @@ export default function Screener() {
             <input
               type="number" step={0.1} placeholder="0"
               value={betaMin} onChange={e => setBetaMin(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -426,6 +433,7 @@ export default function Screener() {
             <input
               type="number" step={0.1} placeholder="∞"
               value={betaMax} onChange={e => setBetaMax(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -434,6 +442,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="e.g. 1000000"
               value={volMin} onChange={e => setVolMin(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -442,6 +451,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="∞"
               value={volMax} onChange={e => setVolMax(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -455,6 +465,7 @@ export default function Screener() {
             <input
               type="number" min={0} step={0.01} placeholder="0"
               value={divMin} onChange={e => setDivMin(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -463,6 +474,7 @@ export default function Screener() {
             <input
               type="number" min={0} step={0.01} placeholder="∞"
               value={divMax} onChange={e => setDivMax(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -485,6 +497,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="e.g. 25"
               value={maxPe} onChange={e => setMaxPe(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -493,6 +506,7 @@ export default function Screener() {
             <input
               type="number" min={0} placeholder="e.g. 15"
               value={minRoe} onChange={e => setMinRoe(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -501,6 +515,7 @@ export default function Screener() {
             <input
               type="number" min={0} step={0.1} placeholder="e.g. 2"
               value={minDivYield} onChange={e => setMinDivYield(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runScreen(); }}
               style={inputStyle}
             />
           </div>
@@ -547,13 +562,19 @@ export default function Screener() {
           )}
         </div>
 
-        {!hasRun && !loading && (
+        {loading && (
+          <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
+            Screening… fetching fundamentals for each result, may take ~10s
+          </p>
+        )}
+
+        {!loading && !hasRun && (
           <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
             Set your filters above and click Screen
           </p>
         )}
 
-        {hasRun && results.length === 0 && !loading && (
+        {!loading && hasRun && results.length === 0 && (
           <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
             No results matched your filters
           </p>
@@ -620,7 +641,7 @@ export default function Screener() {
                     <td style={{ ...tableCellStyle, color: row.dividendYield != null && row.dividendYield > 0 ? C.text : C.muted }}>
                       {row.dividendYield != null && row.dividendYield > 0 ? fmtPct(row.dividendYield) : "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: row.debtEquity != null ? (row.debtEquity <= 1 ? C.green : row.debtEquity <= 2 ? C.gold : C.red) : C.muted }}>
+                    <td style={{ ...tableCellStyle, color: row.debtEquity != null ? (row.debtEquity < 0 ? C.red : row.debtEquity <= 1 ? C.green : row.debtEquity <= 2 ? C.gold : C.red) : C.muted }}>
                       {fmtNum(row.debtEquity, 2)}
                     </td>
                     <td style={{ ...tableCellStyle, fontWeight: 600, color: piotroskiColor(row.piotroskiScore) }}>

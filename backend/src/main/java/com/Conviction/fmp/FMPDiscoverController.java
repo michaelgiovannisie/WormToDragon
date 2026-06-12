@@ -79,7 +79,7 @@ public class FMPDiscoverController {
         if (sector           != null) { params.add("sector");            params.add(sector); }
         if (exchange         != null) { params.add("exchange");          params.add(exchange); }
         if (marketCapMoreThan != null) { params.add("marketCapMoreThan"); params.add(marketCapMoreThan.toString()); }
-        if (marketCapLessThan != null) { params.add("marketCapLessThan"); params.add(marketCapLessThan.toString()); }
+        if (marketCapLessThan != null) { params.add("marketCapLowerThan"); params.add(marketCapLessThan.toString()); }
         params.add("limit"); params.add(String.valueOf(Math.min(limit, 50)));
 
         List<Map<String, Object>> result = fmp.get("/company-screener", List.class, params.toArray(new String[0]));
@@ -141,26 +141,42 @@ public class FMPDiscoverController {
         params.add("isFund");           params.add(isFund != null ? isFund.toString() : "false");
         params.add("isActivelyTrading"); params.add(isActivelyTrading != null ? isActivelyTrading.toString() : "true");
         if (includeAllShareClasses != null) { params.add("includeAllShareClasses"); params.add(includeAllShareClasses.toString()); }
-        params.add("limit");             params.add(String.valueOf(Math.min(limit * 2, 200)));
+        params.add("limit");             params.add(String.valueOf(Math.min(limit, 100)));
 
         List<Map<String, Object>> raw = fmp.get("/company-screener", List.class, params.toArray(new String[0]));
+        System.out.println("[Screener] FMP returned " + (raw == null ? "null" : raw.size()) + " results for params: " + params);
         if (raw == null || raw.isEmpty()) return List.of();
 
-        // 2. Enrich each symbol in parallel with ratios-ttm + financial-scores
-        List<FMPEnrichedScreenerResult> enriched = raw.parallelStream()
-                .map(this::enrich)
-                .filter(r -> r != null)
-                .collect(java.util.stream.Collectors.toList());
+        // 2. Enrich with a bounded thread pool (5 threads) to avoid FMP rate limits.
+        //    parallelStream() uses all CPU cores simultaneously → triggers 429s on free tier.
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(5);
+        List<FMPEnrichedScreenerResult> enriched;
+        try {
+            List<java.util.concurrent.Future<FMPEnrichedScreenerResult>> futures = raw.stream()
+                    .map(r -> executor.submit(() -> enrich(r)))
+                    .collect(java.util.stream.Collectors.toList());
+            enriched = futures.stream()
+                    .map(f -> { try { return f.get(); } catch (Exception ignored) { return null; } })
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toList());
+        } finally {
+            executor.shutdown();
+        }
 
         // 3. Post-filter on fundamentals
         return enriched.stream()
-                .filter(r -> maxPeRatio      == null || (r.peRatio()       != null && r.peRatio().doubleValue()       > 0 && r.peRatio().doubleValue()       <= maxPeRatio))
-                .filter(r -> minRoe          == null || (r.roe()           != null && r.roe().doubleValue()           >= minRoe))
-                .filter(r -> minDividendYield == null || (r.dividendYield() != null && r.dividendYield().doubleValue() >= minDividendYield))
-                .filter(r -> minPiotroski    == null || (r.piotroskiScore() != null && r.piotroskiScore()             >= minPiotroski))
+                // null metric = pass through (don't penalise missing data)
+                .filter(r -> maxPeRatio       == null || r.peRatio()       == null || (r.peRatio().doubleValue()       > 0 && r.peRatio().doubleValue()       <= maxPeRatio))
+                .filter(r -> minRoe           == null || r.roe()           == null || r.roe().doubleValue()           >= minRoe)
+                .filter(r -> minDividendYield == null || r.dividendYield() == null || r.dividendYield().doubleValue() >= minDividendYield)
+                .filter(r -> minPiotroski     == null || r.piotroskiScore() == null || r.piotroskiScore()             >= minPiotroski)
                 .limit(limit)
                 .toList();
     }
+
+    // Logs the ratios-ttm key set exactly once per app run so we can verify field names
+    private static final java.util.concurrent.atomic.AtomicBoolean ratiosDebugLogged =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     @SuppressWarnings("unchecked")
     private FMPEnrichedScreenerResult enrich(Map<String, Object> r) {
@@ -173,12 +189,27 @@ public class FMPDiscoverController {
         List<Map<String, Object>> ratios = fmp.get("/ratios-ttm", List.class, "symbol", symbol);
         if (ratios != null && !ratios.isEmpty()) {
             Map<String, Object> m = ratios.get(0);
-            peRatio       = toBD(m.get("peRatioTTM"));
-            pbRatio       = toBD(m.get("pbRatioTTM"));
-            roe           = toBD(m.get("returnOnEquityTTM"));
+            if (ratiosDebugLogged.compareAndSet(false, true)) {
+                System.out.println("[ratios-ttm DEBUG " + symbol + "] keys: " + m.keySet());
+                System.out.println("[ratios-ttm DEBUG " + symbol + "] peRatioTTM=" + m.get("peRatioTTM")
+                        + " | priceBookValueRatioTTM=" + m.get("priceBookValueRatioTTM")
+                        + " | returnOnEquityTTM=" + m.get("returnOnEquityTTM")
+                        + " | debtEquityRatioTTM=" + m.get("debtEquityRatioTTM")
+                        + " | netProfitMarginTTM=" + m.get("netProfitMarginTTM")
+                        + " | dividendYielTTM=" + m.get("dividendYielTTM"));
+            }
+            // FMP v4 renamed all ratio fields
+            peRatio       = toBD(m.get("priceToEarningsRatioTTM"));
+            pbRatio       = toBD(m.get("priceToBookRatioTTM"));
             netMargin     = toBD(m.get("netProfitMarginTTM"));
             dividendYield = toBD(m.get("dividendYieldTTM"));
-            debtEquity    = toBD(m.get("debtToEquityTTM"));
+            debtEquity    = toBD(m.get("debtToEquityRatioTTM"));
+            // ROE removed from ratios-ttm in FMP v4 — compute from per-share figures
+            BigDecimal niPS = toBD(m.get("netIncomePerShareTTM"));
+            BigDecimal eqPS = toBD(m.get("shareholdersEquityPerShareTTM"));
+            if (niPS != null && eqPS != null && eqPS.compareTo(BigDecimal.ZERO) != 0) {
+                roe = niPS.divide(eqPS, 8, java.math.RoundingMode.HALF_UP);
+            }
         }
 
         // financial-scores — Piotroski, Altman Z
@@ -304,6 +335,11 @@ public class FMPDiscoverController {
 
     private String str(Map<String, Object> m, String key) {
         Object v = m.get(key); return v != null ? v.toString() : null;
+    }
+    /** Returns the value of the first key that exists and is non-null in the map. */
+    private Object firstNonNull(Map<String, Object> m, String... keys) {
+        for (String k : keys) { Object v = m.get(k); if (v != null) return v; }
+        return null;
     }
     private BigDecimal toBD(Object val) {
         if (val == null) return null;
