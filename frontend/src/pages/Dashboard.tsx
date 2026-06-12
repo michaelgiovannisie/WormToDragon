@@ -87,6 +87,7 @@ export default function Dashboard() {
   const [benchmark, setBenchmark]       = useState("SPY");
   const [benchmarkInput, setBenchmarkInput] = useState("SPY");
   const [benchmarkPrices, setBenchmarkPrices] = useState<any[]>([]);
+  const [benchmarkError, setBenchmarkError]   = useState<string | null>(null);
   const [showAllTx, setShowAllTx]       = useState(false);
 
   // Core data — summary, holdings, transactions. Only re-fetched on mount.
@@ -117,10 +118,16 @@ export default function Dashboard() {
 
   // Benchmark — re-fetch only when the symbol changes.
   useEffect(() => {
-    if (!benchmark || benchmark === "none") { setBenchmarkPrices([]); return; }
+    if (!benchmark || benchmark === "none") { setBenchmarkPrices([]); setBenchmarkError(null); return; }
+    setBenchmarkError(null);
     fetch(`${API}/historical-prices/${benchmark.toUpperCase()}`)
-      .then(r => r.json()).then(d => setBenchmarkPrices(Array.isArray(d) ? d : []))
-      .catch(() => setBenchmarkPrices([]));
+      .then(r => r.json())
+      .then(d => {
+        const prices = Array.isArray(d) ? d : [];
+        setBenchmarkPrices(prices);
+        if (prices.length === 0) setBenchmarkError(`No data found for "${benchmark}"`);
+      })
+      .catch(() => { setBenchmarkPrices([]); setBenchmarkError(`Failed to load "${benchmark}"`); });
   }, [benchmark]);
 
   const handleRangeChange = (range: string) => {
@@ -164,11 +171,15 @@ export default function Dashboard() {
 
   const alphaStats = (() => {
     const pts = benchmarkChartData.filter((p: any) => p.benchmark != null);
-    if (pts.length < 2 || trendData.length < 2) return null;
-    const firstValue   = trendData[0].value;
-    const lastValue    = trendData[trendData.length - 1].value;
-    const firstBench   = pts[0].benchmark as number;
-    const lastBench    = pts[pts.length - 1].benchmark as number;
+    if (pts.length < 2) return null;
+    // Use the same start/end dates for both series so the comparison period is identical
+    const firstPt    = pts[0];
+    const lastPt     = pts[pts.length - 1];
+    const firstValue = firstPt.value;
+    const lastValue  = lastPt.value;
+    const firstBench = firstPt.benchmark as number;
+    const lastBench  = lastPt.benchmark as number;
+    if (!firstValue || !firstBench) return null;
     const portfolioRet = ((lastValue - firstValue) / firstValue) * 100;
     const benchmarkRet = ((lastBench - firstBench) / firstBench) * 100;
     const alpha        = portfolioRet - benchmarkRet;
@@ -219,11 +230,11 @@ export default function Dashboard() {
   return (
     <div style={{ color: C.text, fontFamily: C.font }}>
       <p style={labelStyle}>Portfolio Dashboard</p>
-      <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>
-        Long-Term Compounders
+      <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px", color: "#4CAF7D" }}>
+        Invest with high conviction.
       </h2>
       <p style={{ color: C.muted, marginBottom: "24px" }}>
-        A refined view of capital, conviction, and performance.
+        Know what to buy. Know when to buy it.
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
         <HoldingsSyncWidget onComplete={loadCoreData} />
@@ -301,13 +312,22 @@ export default function Dashboard() {
                 {alphaStats.alpha >= 0 ? "+" : ""}{alphaStats.alpha.toFixed(2)}% vs {benchmark}
               </span>
             )}
+            {benchmarkError && (
+              <span style={{ marginLeft: "8px", fontSize: "12px", color: C.red }}>{benchmarkError}</span>
+            )}
           </div>
 
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={benchmarkChartData}>
               <CartesianGrid stroke="rgba(200,169,106,0.08)" vertical={false} />
               <XAxis dataKey="date" stroke={C.muted} tick={{ fontSize: 12 }} interval="preserveStartEnd" minTickGap={60} />
-              <YAxis stroke={C.muted} tick={{ fontSize: 12 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+              <YAxis stroke={C.muted} tick={{ fontSize: 12 }} tickFormatter={v => {
+                const abs = Math.abs(v);
+                if (abs >= 1_000_000_000) return `$${(v/1_000_000_000).toFixed(1)}B`;
+                if (abs >= 1_000_000)     return `$${(v/1_000_000).toFixed(1)}M`;
+                if (abs >= 1_000)         return `$${(v/1_000).toFixed(0)}k`;
+                return `$${v.toFixed(0)}`;
+              }} />
               <Tooltip {...tooltipStyle} formatter={(v: any, name: string) => [
                 fmt$(Number(v)),
                 name === "benchmark" ? benchmark : "Portfolio"

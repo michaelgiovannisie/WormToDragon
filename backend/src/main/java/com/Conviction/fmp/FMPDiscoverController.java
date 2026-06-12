@@ -115,6 +115,7 @@ public class FMPDiscoverController {
             @RequestParam(required = false) Boolean includeAllShareClasses,
             // ── enrichment post-filters ──
             @RequestParam(required = false) Double maxPeRatio,
+            @RequestParam(required = false) Double maxPbRatio,
             @RequestParam(required = false) Double minRoe,             // decimal, e.g. 0.15 = 15%
             @RequestParam(required = false) Double minDividendYield,   // decimal, e.g. 0.02 = 2%
             @RequestParam(required = false) Integer minPiotroski,
@@ -166,7 +167,8 @@ public class FMPDiscoverController {
         // 3. Post-filter on fundamentals
         return enriched.stream()
                 // null metric = pass through (don't penalise missing data)
-                .filter(r -> maxPeRatio       == null || r.peRatio()       == null || (r.peRatio().doubleValue()       > 0 && r.peRatio().doubleValue()       <= maxPeRatio))
+                .filter(r -> maxPeRatio       == null || r.peRatio()       == null || r.peRatio().doubleValue()       <= maxPeRatio)
+                .filter(r -> maxPbRatio       == null || r.pbRatio()       == null || r.pbRatio().doubleValue()       <= maxPbRatio)
                 .filter(r -> minRoe           == null || r.roe()           == null || r.roe().doubleValue()           >= minRoe)
                 .filter(r -> minDividendYield == null || r.dividendYield() == null || r.dividendYield().doubleValue() >= minDividendYield)
                 .filter(r -> minPiotroski     == null || r.piotroskiScore() == null || r.piotroskiScore()             >= minPiotroski)

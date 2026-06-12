@@ -34,14 +34,14 @@ const SECTORS = [
 
 const EXCHANGES = ["NASDAQ", "NYSE", "AMEX", "LSE", "TSX", "HKEX", "ASX", "EURONEXT"];
 
-const MARKET_CAP_TIERS: { label: string; more?: number; less?: number }[] = [
-  { label: "Any" },
-  { label: "Mega (>$200B)",      more: 200_000_000_000 },
-  { label: "Large ($10B–$200B)", more: 10_000_000_000,  less: 200_000_000_000 },
-  { label: "Mid ($2B–$10B)",     more: 2_000_000_000,   less: 10_000_000_000 },
-  { label: "Small ($300M–$2B)",  more: 300_000_000,     less: 2_000_000_000 },
-  { label: "Micro (<$300M)",                             less: 300_000_000 },
+const INDUSTRIES = [
+  "Software", "Semiconductors", "Banks", "Insurance", "Biotechnology",
+  "Pharmaceuticals", "Oil & Gas", "Retail", "Automotive",
+  "Aerospace & Defense", "REITs", "Utilities", "Media", "Telecom",
+  "Consumer Electronics", "Asset Management", "Restaurants",
+  "Healthcare Services", "E-Commerce", "Industrial Machinery",
 ];
+
 
 const PIOTROSKI_OPTIONS = [
   { label: "Any",             value: "" },
@@ -244,7 +244,8 @@ export default function Screener() {
   const [country,   setCountry]   = useState("");
 
   // ── Size / Price ──
-  const [capTier,   setCapTier]   = useState(0);
+  const [capMin,    setCapMin]    = useState("");
+  const [capMax,    setCapMax]    = useState("");
   const [priceMin,  setPriceMin]  = useState("");
   const [priceMax,  setPriceMax]  = useState("");
 
@@ -266,6 +267,7 @@ export default function Screener() {
 
   // ── Enrichment post-filters ──
   const [maxPe,        setMaxPe]        = useState("");
+  const [maxPb,        setMaxPb]        = useState("");
   const [minRoe,       setMinRoe]       = useState("");  // user enters %
   const [minDivYield,  setMinDivYield]  = useState("");  // user enters %
   const [minPiotroski, setMinPiotroski] = useState("");
@@ -294,7 +296,6 @@ export default function Screener() {
     setError(null);
     setResults([]);
 
-    const tier = MARKET_CAP_TIERS[capTier];
     const p = new URLSearchParams();
 
     // Universe
@@ -304,10 +305,10 @@ export default function Screener() {
     if (country)   p.set("country",   country);
 
     // Size / Price
-    if (tier.more) p.set("marketCapMoreThan",  String(tier.more));
-    if (tier.less) p.set("marketCapLowerThan", String(tier.less));
-    if (priceMin)  p.set("priceMoreThan",  priceMin);
-    if (priceMax)  p.set("priceLowerThan", priceMax);
+    if (capMin)   p.set("marketCapMoreThan",  String(Math.round(Number(capMin)  * 1_000_000_000)));
+    if (capMax)   p.set("marketCapLowerThan", String(Math.round(Number(capMax)  * 1_000_000_000)));
+    if (priceMin) p.set("priceMoreThan",  priceMin);
+    if (priceMax) p.set("priceLowerThan", priceMax);
 
     // Beta / Volume
     if (betaMin) p.set("betaMoreThan",    betaMin);
@@ -327,6 +328,7 @@ export default function Screener() {
 
     // Enrichment post-filters
     if (maxPe)        p.set("maxPeRatio",       maxPe);
+    if (maxPb)        p.set("maxPbRatio",       maxPb);
     if (minRoe)       p.set("minRoe",           String(Number(minRoe) / 100));
     if (minDivYield)  p.set("minDividendYield", String(Number(minDivYield) / 100));
     if (minPiotroski) p.set("minPiotroski",     minPiotroski);
@@ -394,11 +396,10 @@ export default function Screener() {
           </div>
           <div>
             <p style={fieldLabel}>Industry</p>
-            <input
-              type="text" placeholder="e.g. Software"
-              value={industry} onChange={e => setIndustry(e.target.value)}
-              onKeyDown={onEnter} style={inputStyle}
-            />
+            <select value={industry} onChange={e => setIndustry(e.target.value)} style={selectStyle}>
+              <option value="">All Industries</option>
+              {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
           </div>
           <div>
             <p style={fieldLabel}>Country</p>
@@ -412,12 +413,22 @@ export default function Screener() {
 
         {/* ── Size / Price ── */}
         <p style={groupLabel}>Size &amp; Price</p>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "10px", marginBottom: "18px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px", marginBottom: "18px" }}>
           <div>
-            <p style={fieldLabel}>Market Cap</p>
-            <select value={capTier} onChange={e => setCapTier(Number(e.target.value))} style={selectStyle}>
-              {MARKET_CAP_TIERS.map((t, i) => <option key={i} value={i}>{t.label}</option>)}
-            </select>
+            <p style={fieldLabel}>Market Cap Min ($B)</p>
+            <input
+              type="number" min={0} placeholder="e.g. 10"
+              value={capMin} onChange={e => setCapMin(e.target.value)}
+              onKeyDown={onEnter} style={inputStyle}
+            />
+          </div>
+          <div>
+            <p style={fieldLabel}>Market Cap Max ($B)</p>
+            <input
+              type="number" min={0} placeholder="∞"
+              value={capMax} onChange={e => setCapMax(e.target.value)}
+              onKeyDown={onEnter} style={inputStyle}
+            />
           </div>
           <div>
             <p style={fieldLabel}>Price Min ($)</p>
@@ -524,12 +535,20 @@ export default function Screener() {
             (applied after enrichment — slower)
           </span>
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px", marginBottom: "20px" }}>
           <div>
             <p style={fieldLabel}>Max P/E</p>
             <input
               type="number" min={0} placeholder="e.g. 25"
               value={maxPe} onChange={e => setMaxPe(e.target.value)}
+              onKeyDown={onEnter} style={inputStyle}
+            />
+          </div>
+          <div>
+            <p style={fieldLabel}>Max P/B</p>
+            <input
+              type="number" min={0} step={0.1} placeholder="e.g. 3"
+              value={maxPb} onChange={e => setMaxPb(e.target.value)}
               onKeyDown={onEnter} style={inputStyle}
             />
           </div>
@@ -664,11 +683,11 @@ export default function Screener() {
                     <td style={{ ...tableCellStyle, color: row.beta != null ? (Math.abs(row.beta) <= 1 ? C.green : Math.abs(row.beta) <= 1.5 ? C.gold : C.red) : C.muted }}>
                       {fmtNum(row.beta, 2)}
                     </td>
-                    <td style={{ ...tableCellStyle, color: row.peRatio != null && row.peRatio > 0 ? peColor(row.peRatio) : C.muted }}>
-                      {row.peRatio != null && row.peRatio > 0 ? fmtRatio(row.peRatio) : "—"}
+                    <td style={{ ...tableCellStyle, color: peColor(row.peRatio) }}>
+                      {row.peRatio != null ? fmtRatio(row.peRatio) : "—"}
                     </td>
-                    <td style={tableCellStyle}>
-                      {row.pbRatio != null && row.pbRatio > 0 ? fmtRatio(row.pbRatio) : "—"}
+                    <td style={{ ...tableCellStyle, color: row.pbRatio != null && row.pbRatio < 0 ? C.red : C.text }}>
+                      {row.pbRatio != null ? fmtRatio(row.pbRatio) : "—"}
                     </td>
                     <td style={{ ...tableCellStyle, color: roePctColor(row.roe) }}>
                       {fmtPct(row.roe)}

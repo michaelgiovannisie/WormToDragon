@@ -9,28 +9,65 @@ const emptyForm = {
   fees: "0", transactionDate: "", notes: "",
 };
 
+// ── module-level styles ───────────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
+  borderRadius: "10px", padding: "10px 14px", fontSize: "14px",
+  fontFamily: C.font, width: "100%", boxSizing: "border-box",
+};
+
+// ── helpers ───────────────────────────────────────────────────────────────
+
+function fmtQty(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return parseFloat(v.toFixed(8)).toString();
+}
+
+function fmtPrice(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── component ─────────────────────────────────────────────────────────────
+
 export default function Import() {
-  const fileRef                     = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver]     = useState(false);
-  const [csvFile, setCsvFile]       = useState<File | null>(null);
-  const [importing, setImporting]   = useState(false);
+  const fileRef                         = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver]         = useState(false);
+  const [csvFile, setCsvFile]           = useState<File | null>(null);
+  const [importing, setImporting]       = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [importError, setImportError]   = useState<string | null>(null);
-  const [form, setForm]             = useState(emptyForm);
-  const [submitting, setSubmitting] = useState(false);
-  const [txResult, setTxResult]     = useState<any>(null);
-  const [txError, setTxError]       = useState<string | null>(null);
+  const [form, setForm]                 = useState(emptyForm);
+  const [submitting, setSubmitting]     = useState(false);
+  const [txResult, setTxResult]         = useState<any>(null);
+  const [txError, setTxError]           = useState<string | null>(null);
+
+  // ── CSV helpers ──────────────────────────────────────────────────────────
+
+  function acceptFile(f: File | null | undefined) {
+    if (!f) return;
+    if (!f.name.endsWith(".csv")) {
+      setImportError("Please select a .csv file");
+      return;
+    }
+    setImportError(null);
+    setCsvFile(f);
+  }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (f?.name.endsWith(".csv")) setCsvFile(f);
+    acceptFile(e.dataTransfer.files[0]);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear highlight when truly leaving the drop zone, not a child element
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) setCsvFile(f);
+    acceptFile(e.target.files?.[0]);
   };
 
   const handleImport = async () => {
@@ -44,10 +81,15 @@ export default function Import() {
       fd.append("accountId",   ACCOUNT_ID);
       fd.append("file",        csvFile);
       const res = await fetch(`${API}/imports/robinhood`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message ?? `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setImportResult(data);
       setCsvFile(null);
+      // Reset file input so the same file can be re-selected later
+      if (fileRef.current) fileRef.current.value = "";
     } catch (e: any) {
       setImportError(e.message ?? "Import failed");
     } finally {
@@ -55,10 +97,19 @@ export default function Import() {
     }
   };
 
+  // ── Manual entry ─────────────────────────────────────────────────────────
+
   const handleManualSubmit = async () => {
-    setSubmitting(true);
+    // Clear previous result/error before validation so banners don't coexist
     setTxResult(null);
     setTxError(null);
+    // Client-side validation
+    if (!form.symbol.trim()) { setTxError("Symbol is required"); return; }
+    if (!form.transactionDate) { setTxError("Date is required"); return; }
+    if (Number(form.quantity) <= 0) { setTxError("Quantity must be greater than 0"); return; }
+    if (Number(form.pricePerUnit) < 0) { setTxError("Price cannot be negative"); return; }
+
+    setSubmitting(true);
     try {
       const res = await fetch(`${API}/transactions`, {
         method: "POST",
@@ -88,11 +139,7 @@ export default function Import() {
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
-    borderRadius: "10px", padding: "10px 14px", fontSize: "14px",
-    fontFamily: C.font, width: "100%", boxSizing: "border-box",
-  };
+  // ── render ────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ color: C.text, fontFamily: C.font }}>
@@ -110,7 +157,7 @@ export default function Import() {
         {/* Drop zone */}
         <div
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
+          onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
           style={{
@@ -132,10 +179,16 @@ export default function Import() {
         </div>
 
         {csvFile && (
-          <button onClick={handleImport} disabled={importing}
-            style={{ marginTop: "20px", background: C.gold, color: C.bg, border: "none",
-              borderRadius: "10px", padding: "12px 28px", cursor: "pointer",
-              fontFamily: C.font, fontSize: "15px", fontWeight: 700, opacity: importing ? 0.7 : 1 }}>
+          <button
+            onClick={handleImport}
+            disabled={importing}
+            style={{
+              marginTop: "20px", background: C.gold, color: C.bg, border: "none",
+              borderRadius: "10px", padding: "12px 28px",
+              cursor: importing ? "not-allowed" : "pointer",
+              fontFamily: C.font, fontSize: "15px", fontWeight: 700, opacity: importing ? 0.7 : 1,
+            }}
+          >
             {importing ? "Importing…" : "Confirm Import"}
           </button>
         )}
@@ -159,7 +212,7 @@ export default function Import() {
         {importError && (
           <div style={{ marginTop: "24px", padding: "20px", background: "rgba(224,108,117,0.08)",
             border: `1px solid rgba(224,108,117,0.25)`, borderRadius: "12px" }}>
-            <p style={{ color: C.red, margin: 0 }}>Import failed: {importError}</p>
+            <p style={{ color: C.red, margin: 0 }}>{importError}</p>
           </div>
         )}
       </section>
@@ -173,15 +226,22 @@ export default function Import() {
           {/* Symbol */}
           <div>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Symbol</p>
-            <input value={form.symbol} onChange={e => setForm(v => ({...v, symbol: e.target.value}))}
-              placeholder="e.g. AAPL" style={inputStyle} />
+            <input
+              value={form.symbol}
+              onChange={e => setForm(v => ({ ...v, symbol: e.target.value }))}
+              placeholder="e.g. AAPL"
+              style={inputStyle}
+            />
           </div>
 
           {/* Type */}
           <div>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Transaction Type</p>
-            <select value={form.transactionType} onChange={e => setForm(v => ({...v, transactionType: e.target.value}))}
-              style={{ ...inputStyle, cursor: "pointer" }}>
+            <select
+              value={form.transactionType}
+              onChange={e => setForm(v => ({ ...v, transactionType: e.target.value }))}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
               {TRANSACTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
@@ -189,44 +249,72 @@ export default function Import() {
           {/* Date */}
           <div>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Date</p>
-            <input type="date" value={form.transactionDate}
-              onChange={e => setForm(v => ({...v, transactionDate: e.target.value}))}
-              style={{ ...inputStyle, colorScheme: "dark" }} />
+            <input
+              type="date"
+              value={form.transactionDate}
+              onChange={e => setForm(v => ({ ...v, transactionDate: e.target.value }))}
+              style={{ ...inputStyle, colorScheme: "dark" }}
+            />
           </div>
 
           {/* Quantity */}
           <div>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Quantity</p>
-            <input type="number" value={form.quantity} placeholder="0.00"
-              onChange={e => setForm(v => ({...v, quantity: e.target.value}))} style={inputStyle} />
+            <input
+              type="number" min={0} step="any"
+              value={form.quantity}
+              placeholder="0.00"
+              onChange={e => setForm(v => ({ ...v, quantity: e.target.value }))}
+              style={inputStyle}
+            />
           </div>
 
           {/* Price */}
           <div>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Price Per Unit ($)</p>
-            <input type="number" value={form.pricePerUnit} placeholder="0.00"
-              onChange={e => setForm(v => ({...v, pricePerUnit: e.target.value}))} style={inputStyle} />
+            <input
+              type="number" min={0} step="any"
+              value={form.pricePerUnit}
+              placeholder="0.00"
+              onChange={e => setForm(v => ({ ...v, pricePerUnit: e.target.value }))}
+              style={inputStyle}
+            />
           </div>
 
           {/* Fees */}
           <div>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Fees ($)</p>
-            <input type="number" value={form.fees} placeholder="0.00"
-              onChange={e => setForm(v => ({...v, fees: e.target.value}))} style={inputStyle} />
+            <input
+              type="number" min={0} step="any"
+              value={form.fees}
+              placeholder="0.00"
+              onChange={e => setForm(v => ({ ...v, fees: e.target.value }))}
+              style={inputStyle}
+            />
           </div>
 
           {/* Notes */}
           <div style={{ gridColumn: "span 3" }}>
             <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Notes (optional)</p>
-            <input value={form.notes} onChange={e => setForm(v => ({...v, notes: e.target.value}))}
-              placeholder="e.g. Earnings dip buy" style={inputStyle} />
+            <input
+              value={form.notes}
+              onChange={e => setForm(v => ({ ...v, notes: e.target.value }))}
+              placeholder="e.g. Earnings dip buy"
+              style={inputStyle}
+            />
           </div>
         </div>
 
-        <button onClick={handleManualSubmit} disabled={submitting}
-          style={{ marginTop: "24px", background: C.gold, color: C.bg, border: "none",
-            borderRadius: "10px", padding: "12px 28px", cursor: "pointer",
-            fontFamily: C.font, fontSize: "15px", fontWeight: 700, opacity: submitting ? 0.7 : 1 }}>
+        <button
+          onClick={handleManualSubmit}
+          disabled={submitting}
+          style={{
+            marginTop: "24px", background: C.gold, color: C.bg, border: "none",
+            borderRadius: "10px", padding: "12px 28px",
+            cursor: submitting ? "not-allowed" : "pointer",
+            fontFamily: C.font, fontSize: "15px", fontWeight: 700, opacity: submitting ? 0.7 : 1,
+          }}
+        >
           {submitting ? "Adding…" : "Add Transaction"}
         </button>
 
@@ -234,7 +322,9 @@ export default function Import() {
           <div style={{ marginTop: "20px", padding: "16px 20px", background: "rgba(143,214,148,0.08)",
             border: `1px solid rgba(143,214,148,0.25)`, borderRadius: "12px" }}>
             <p style={{ color: C.green, margin: 0, fontSize: "14px" }}>
-              Transaction added — {txResult.symbol} {txResult.transactionType} {txResult.quantity} @ ${txResult.pricePerUnit}
+              Transaction added —{" "}
+              {txResult.symbol} {txResult.transactionType}{" "}
+              {fmtQty(txResult.quantity)} @ ${fmtPrice(txResult.pricePerUnit)}
             </p>
           </div>
         )}

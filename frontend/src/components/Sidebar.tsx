@@ -30,9 +30,6 @@ export default function Sidebar() {
         <h1 style={{ color: C.gold, fontSize: "26px", margin: 0, letterSpacing: "0.04em" }}>
           Conviction
         </h1>
-        <p style={{ color: C.muted, fontSize: "12px", marginTop: "6px", letterSpacing: "0.08em" }}>
-          Investment Intelligence
-        </p>
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
