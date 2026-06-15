@@ -60,5 +60,9 @@ public class FinancialSnapshot {
     private BigDecimal psRatio;
     private BigDecimal evToEbitda;
 
+    /** ISO 4217 currency code for monetary fields (e.g. "USD", "TWD"). */
+    @Column(name = "reported_currency", length = 10)
+    private String reportedCurrency;
+
     private LocalDateTime updatedAt;
 }

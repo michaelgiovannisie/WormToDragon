@@ -34,8 +34,16 @@ public class FinancialsController {
         }
         List<FinancialSnapshot> quarterRows = repo.findBySymbolAndPeriodOrderByFiscalYearDesc(sym, "quarter");
 
+        // Derive reporting currency from whichever series has data first
+        String reportedCurrency = "USD";
+        List<FinancialSnapshot> source = annualRows.isEmpty() ? quarterRows : annualRows;
+        if (!source.isEmpty() && source.get(0).getReportedCurrency() != null) {
+            reportedCurrency = source.get(0).getReportedCurrency();
+        }
+
         return new FinancialsResponse(
             sym,
+            reportedCurrency,
             annualRows.stream().map(this::toRow).toList(),
             quarterRows.stream().map(this::toRow).toList()
         );
@@ -73,5 +81,5 @@ public class FinancialsController {
             BigDecimal peRatio, BigDecimal pbRatio, BigDecimal psRatio, BigDecimal evToEbitda
     ) {}
 
-    public record FinancialsResponse(String symbol, List<AnnualRow> annual, List<AnnualRow> quarterly) {}
+    public record FinancialsResponse(String symbol, String reportedCurrency, List<AnnualRow> annual, List<AnnualRow> quarterly) {}
 }

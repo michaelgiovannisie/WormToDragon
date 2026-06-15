@@ -60,13 +60,25 @@ public class FinancialsSyncService {
             return false; // nothing to update
         }
 
+        // Detect reporting currency — stored on each snapshot so the frontend
+        // can label graphs correctly (e.g. "TWD" for TSM, "USD" for US companies).
+        // Values are NOT converted; they remain in the company's reporting currency.
+        List<Map<String, Object>> sourceIncome = annualIncome.isEmpty() ? qIncome : annualIncome;
+        String reportedCurrency = "USD";
+        if (!sourceIncome.isEmpty()) {
+            Object rc = sourceIncome.get(0).get("reportedCurrency");
+            if (rc != null && !rc.toString().isBlank()) {
+                reportedCurrency = rc.toString().trim().toUpperCase();
+            }
+        }
+
         if (!annualIncome.isEmpty()) {
             repo.deleteBySymbolAndPeriod(sym, ANNUAL);
-            persistRows(sym, ANNUAL, annualIncome, annualBalance, annualCashflow, annualMetrics, annualRatios);
+            persistRows(sym, ANNUAL, annualIncome, annualBalance, annualCashflow, annualMetrics, annualRatios, reportedCurrency);
         }
         if (!qIncome.isEmpty()) {
             repo.deleteBySymbolAndPeriod(sym, QUARTER);
-            persistRows(sym, QUARTER, qIncome, qBalance, qCashflow, qMetrics, qRatios);
+            persistRows(sym, QUARTER, qIncome, qBalance, qCashflow, qMetrics, qRatios, reportedCurrency);
         }
         return true;
     }
@@ -90,7 +102,8 @@ public class FinancialsSyncService {
             List<Map<String, Object>> balance,
             List<Map<String, Object>> cashflow,
             List<Map<String, Object>> metrics,
-            List<Map<String, Object>> ratios) {
+            List<Map<String, Object>> ratios,
+            String reportedCurrency) {
 
         // Deduplicate income by date — FMP occasionally returns the same fiscal date
         // twice (e.g. Apple's Sep quarter-end appears as both Q4 and a full-year row).
@@ -152,6 +165,7 @@ public class FinancialsSyncService {
             snap.setRevenue(rev);
             snap.setNetIncome(ni);
             snap.setEpsDiluted(bd(inc.get("epsDiluted")));
+            snap.setReportedCurrency(reportedCurrency);
             snap.setNetMarginPct(divide(ni, rev, 100));
             snap.setOperatingCashFlow(bd(cf.get("operatingCashFlow")));
             snap.setFreeCashFlow(bd(cf.get("freeCashFlow")));

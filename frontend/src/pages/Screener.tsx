@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { API } from "../constants";
+import { API, PORTFOLIO_ID } from "../constants";
 import { C, sectionStyle, labelStyle, tableCellStyle } from "../theme";
 
 // ── types ──────────────────────────────────────────────────────────────────
@@ -22,6 +22,11 @@ interface ScreenerResult {
   debtEquity: number | null;
   piotroskiScore: number | null;
   altmanZScore: number | null;
+}
+
+interface WatchlistInfo {
+  id: string;
+  name: string;
 }
 
 // ── constants ──────────────────────────────────────────────────────────────
@@ -281,10 +286,47 @@ export default function Screener() {
   const [error,   setError]   = useState<string | null>(null);
   const [hasRun,  setHasRun]  = useState(false);
 
+  // ── Watchlists ──
+  const [watchlists,     setWatchlists]     = useState<WatchlistInfo[]>([]);
+  const [openDropdown,   setOpenDropdown]   = useState<string | null>(null); // symbol
+  const [addedTo,        setAddedTo]        = useState<Record<string, string>>({}); // symbol → watchlist name
+
   const { sorted, sortKey, sortDir, toggle } = useSortable(results, "marketCap");
 
   // Abort any in-flight request when the component unmounts
   useEffect(() => () => { abortRef.current?.abort(); }, []);
+
+  // Load watchlists once on mount
+  useEffect(() => {
+    fetch(`${API}/watchlists?portfolioId=${PORTFOLIO_ID}`)
+      .then(r => r.json())
+      .then(d => setWatchlists(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!openDropdown) return;
+    const close = () => setOpenDropdown(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openDropdown]);
+
+  async function addToWatchlist(symbol: string, watchlistId: string, watchlistName: string) {
+    setOpenDropdown(null);
+    try {
+      const res = await fetch(`${API}/watchlists/${watchlistId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol }),
+      });
+      if (!res.ok) throw new Error();
+      setAddedTo(prev => ({ ...prev, [symbol]: watchlistName }));
+      setTimeout(() => setAddedTo(prev => { const n = { ...prev }; delete n[symbol]; return n; }), 2000);
+    } catch {
+      // silently ignore — could add error state if needed
+    }
+  }
 
   async function runScreen() {
     // Cancel any in-flight request before starting a new one
@@ -655,6 +697,7 @@ export default function Screener() {
                   <SortTh col="debtEquity"    label="D/E"        sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
                   <SortTh col="piotroskiScore" label="Piotroski" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
                   <SortTh col="altmanZScore"  label="Altman Z"   sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <th style={thStyle}>Watch</th>
                 </tr>
               </thead>
               <tbody>
@@ -706,6 +749,58 @@ export default function Screener() {
                     </td>
                     <td style={{ ...tableCellStyle, color: altmanColor(row.altmanZScore) }}>
                       {fmtNum(row.altmanZScore, 2)}
+                    </td>
+                    <td style={{ ...tableCellStyle, position: "relative" }} onClick={e => e.stopPropagation()}>
+                      {addedTo[row.symbol] ? (
+                        <span style={{ color: C.green, fontSize: "12px" }}>✓ {addedTo[row.symbol]}</span>
+                      ) : (
+                        <button
+                          onClick={e => { e.stopPropagation(); setOpenDropdown(o => o === row.symbol ? null : row.symbol); }}
+                          style={{
+                            background: "rgba(200,169,106,0.12)", color: C.gold,
+                            border: `1px solid rgba(200,169,106,0.3)`, borderRadius: "6px",
+                            padding: "3px 8px", fontSize: "12px", cursor: "pointer",
+                            fontFamily: C.font,
+                          }}
+                        >＋</button>
+                      )}
+                      {openDropdown === row.symbol && watchlists.length > 0 && (
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            position: "absolute", top: "100%", right: 0, zIndex: 100,
+                            background: "#1a2035", border: `1px solid ${C.border}`,
+                            borderRadius: "8px", padding: "4px", minWidth: "160px",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                          }}
+                        >
+                          {watchlists.map(wl => (
+                            <div
+                              key={wl.id}
+                              onClick={() => addToWatchlist(row.symbol, wl.id, wl.name)}
+                              style={{
+                                padding: "8px 12px", borderRadius: "6px", cursor: "pointer",
+                                color: C.text, fontSize: "13px",
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "rgba(200,169,106,0.08)")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                            >
+                              {wl.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {openDropdown === row.symbol && watchlists.length === 0 && (
+                        <div style={{
+                          position: "absolute", top: "100%", right: 0, zIndex: 100,
+                          background: "#1a2035", border: `1px solid ${C.border}`,
+                          borderRadius: "8px", padding: "10px 14px", minWidth: "180px",
+                          color: C.muted, fontSize: "12px",
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                        }}>
+                          No watchlists yet — create one on the Holdings page
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

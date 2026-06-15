@@ -84,8 +84,8 @@ export default function Dashboard() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading]           = useState(true);
   const [chartRange, setChartRange]     = useState("1y");
-  const [benchmark, setBenchmark]       = useState("SPY");
-  const [benchmarkInput, setBenchmarkInput] = useState("SPY");
+  const [benchmark, setBenchmark]       = useState("none");
+  const [benchmarkInput, setBenchmarkInput] = useState("");
   const [benchmarkPrices, setBenchmarkPrices] = useState<any[]>([]);
   const [benchmarkError, setBenchmarkError]   = useState<string | null>(null);
   const [showAllTx, setShowAllTx]       = useState(false);

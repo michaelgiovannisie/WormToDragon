@@ -131,7 +131,7 @@ export default function Research() {
       .finally(() => setDcaLoading(false));
 
     fetch(`${API}/financials/${symbol}`)
-      .then(r => r.json()).then(d => setFinancials({ annual: d?.annual ?? [], quarterly: d?.quarterly ?? [] })).catch(console.error);
+      .then(r => r.json()).then(d => setFinancials({ annual: d?.annual ?? [], quarterly: d?.quarterly ?? [], currency: d?.reportedCurrency ?? "USD" })).catch(console.error);
     // ^^^ reads from DB (no FMP call) — use Sync to refresh
 
     fetch(`${API}/fmp/${symbol}/dividends`)
@@ -167,7 +167,7 @@ export default function Research() {
       .finally(() => setDcaLoading(false));
   };
 
-  const [financials, setFinancials]   = useState<{ annual: any[], quarterly: any[] }>({ annual: [], quarterly: [] });
+  const [financials, setFinancials]   = useState<{ annual: any[], quarterly: any[], currency: string }>({ annual: [], quarterly: [], currency: "USD" });
   const [dividends, setDividends]     = useState<any[]>([]);
   const [finTab, setFinTab]           = useState<"profitability"|"growth"|"health"|"valuation"|"dividend">("profitability");
   const [finPeriod, setFinPeriod]     = useState<"annual"|"quarter">("annual");
@@ -190,7 +190,7 @@ export default function Research() {
       ]);
       setPrices(Array.isArray(newPrices) ? newPrices : []);
       setDetail(newDetail);
-      const finRows = { annual: newFin?.annual ?? [], quarterly: newFin?.quarterly ?? [] };
+      const finRows = { annual: newFin?.annual ?? [], quarterly: newFin?.quarterly ?? [], currency: newFin?.reportedCurrency ?? "USD" };
       setFinancials(finRows);
       // Refresh DCA recommendation with latest price
       refreshDCA(dcaCash);
@@ -251,6 +251,7 @@ export default function Research() {
       // Reload detail to pick up new scenario
       const updated = await fetch(`${API}/assets/${symbol}/detail`).then(r => r.json());
       setDetail(updated);
+      refreshDCA(dcaCash);
       setPresetsError(null);
       setShowForm(false);
     } catch (e: any) {
@@ -285,6 +286,7 @@ export default function Research() {
       if (!presetsRes.ok) throw new Error(await presetsRes.text());
       const updated = await fetch(`${API}/assets/${symbol}/detail`).then(r => r.json());
       setDetail(updated);
+      refreshDCA(dcaCash);
       setValuationError(null);
       setShowForm(false);
     } catch (e: any) {
@@ -833,7 +835,7 @@ export default function Research() {
                     const q = m <= 3 ? "Q1" : m <= 6 ? "Q2" : m <= 9 ? "Q3" : "Q4";
                     return `${q} '${year.slice(2)}`;
                   };
-                  const bil = (v: number) => v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : `$${v}`;
+                  const bil = (v: number) => v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : `$${v.toFixed(0)}`;
 
                   const barColor = (data: any[], key: string) => {
                     if (data.length < 2) return () => C.gold;
@@ -897,30 +899,41 @@ export default function Research() {
                     return true;
                   });
 
+                  const finCurrency = financials.currency ?? "USD";
+                  const isUsd = finCurrency === "USD";
+                  // For non-USD monetary charts: currency goes in the title, not the value
+                  // (avoids "Revenue · GBP : GBP 1.2B" double-label in tooltip)
+                  const moneyTitle = (base: string) => isUsd ? base : `${base} · ${finCurrency}`;
+                  const moneyFmt   = (v: number) => {
+                    const prefix = isUsd ? "$" : "";
+                    return v >= 1e9 ? `${prefix}${(v/1e9).toFixed(1)}B`
+                         : v >= 1e6 ? `${prefix}${(v/1e6).toFixed(0)}M`
+                         : `${prefix}${v.toFixed(0)}`;
+                  };
                   const charts: Record<string, any[]> = {
                     profitability: [
-                      { title: "EPS (Diluted)",    dataKey: "eps",    formatter: (v: number) => `$${v.toFixed(2)}` },
-                      { title: "Net Margin %",     dataKey: "margin", formatter: (v: number) => `${v.toFixed(1)}%` },
-                      { title: "Return on Equity", dataKey: "roe",    formatter: (v: number) => `${v.toFixed(1)}%` },
-                      { title: "ROIC",             dataKey: "roic",   formatter: (v: number) => `${v.toFixed(1)}%` },
+                      { title: moneyTitle("EPS (Diluted)"), dataKey: "eps",    formatter: (v: number) => isUsd ? `$${v.toFixed(2)}` : v.toFixed(2) },
+                      { title: "Net Margin %",              dataKey: "margin", formatter: (v: number) => `${v.toFixed(1)}%` },
+                      { title: "Return on Equity",          dataKey: "roe",    formatter: (v: number) => `${v.toFixed(1)}%` },
+                      { title: "ROIC",                      dataKey: "roic",   formatter: (v: number) => `${v.toFixed(1)}%` },
                     ],
                     growth: [
-                      { title: "Revenue",              dataKey: "revenue",    formatter: bil },
-                      { title: "Net Income",           dataKey: "netIncome",  formatter: bil },
-                      { title: "Operating Cash Flow",  dataKey: "ocf",        formatter: bil },
-                      { title: "Free Cash Flow",       dataKey: "fcf",        formatter: bil },
+                      { title: moneyTitle("Revenue"),             dataKey: "revenue",   formatter: moneyFmt },
+                      { title: moneyTitle("Net Income"),          dataKey: "netIncome", formatter: moneyFmt },
+                      { title: moneyTitle("Operating Cash Flow"), dataKey: "ocf",       formatter: moneyFmt },
+                      { title: moneyTitle("Free Cash Flow"),      dataKey: "fcf",       formatter: moneyFmt },
                     ],
                     health: [
-                      { title: "Total Debt",     dataKey: "debt", formatter: bil },
-                      { title: "Cash & Equiv.",  dataKey: "cash", formatter: bil },
+                      { title: moneyTitle("Total Debt"),    dataKey: "debt", formatter: moneyFmt },
+                      { title: moneyTitle("Cash & Equiv."), dataKey: "cash", formatter: moneyFmt },
                       { title: "Debt / Equity",  dataKey: "de",   formatter: (v: number) => `${v.toFixed(2)}x` },
                       { title: "Current Ratio",  dataKey: "cr",   formatter: (v: number) => `${v.toFixed(2)}x` },
                     ],
                     valuation: [
-                      { title: "P/E Ratio",    dataKey: "pe",      formatter: (v: number) => `${v.toFixed(1)}x` },
-                      { title: "P/B Ratio",    dataKey: "pb",      formatter: (v: number) => `${v.toFixed(1)}x` },
-                      { title: "P/S Ratio",    dataKey: "ps",      formatter: (v: number) => `${v.toFixed(1)}x` },
-                      { title: "EV / EBITDA",  dataKey: "evEbitda",formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "P/E Ratio",    dataKey: "pe",       formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "P/B Ratio",    dataKey: "pb",       formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "P/S Ratio",    dataKey: "ps",       formatter: (v: number) => `${v.toFixed(1)}x` },
+                      { title: "EV / EBITDA",  dataKey: "evEbitda", formatter: (v: number) => `${v.toFixed(1)}x` },
                     ],
                   };
 
