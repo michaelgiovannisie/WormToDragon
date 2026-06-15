@@ -84,6 +84,13 @@ public class FMPKeyMetricsSync {
         //
         // Example: TSM earningsYieldTTM=0.0313, price=$440.81 → USD EPS=$13.79
         //          income-statement EPS=446 TWD → ratio=32× → mismatch detected → corrected.
+        // FX rate derived implicitly from the EPS sanity check.
+        // When a currency mismatch is detected (local EPS >> USD EPS), the ratio
+        // yieldEps / epsTTM_local ≈ the spot FX rate (e.g. 13.79 / 446 ≈ 0.031 USD/TWD).
+        // This is used to convert FCF, BVPS, and dividend — no extra API call needed.
+        BigDecimal fxToUsd = BigDecimal.ONE;
+        boolean nonUsd = !"USD".equals(reportedCurrency);
+
         if (epsTTM != null && earningsYieldTTM != null && quotePrice != null
                 && earningsYieldTTM.compareTo(BigDecimal.ZERO) != 0
                 && quotePrice.compareTo(BigDecimal.ZERO) > 0) {
@@ -92,26 +99,25 @@ public class FMPKeyMetricsSync {
                 BigDecimal ratio = epsTTM.abs().divide(yieldEps, 4, RoundingMode.HALF_UP);
                 if (ratio.compareTo(new BigDecimal("2")) > 0
                         || ratio.compareTo(new BigDecimal("0.5")) < 0) {
+                    // Derive implied FX rate: USD_EPS / local_EPS = USD per 1 local unit
+                    BigDecimal impliedFx = yieldEps.divide(epsTTM.abs(), 8, RoundingMode.HALF_UP);
                     System.out.println("[FMPKeyMetricsSync] Currency mismatch for " + symbol
                             + ": incomeStmtEPS=" + epsTTM
                             + ", yieldDerivedUsdEPS=" + yieldEps
                             + ", ratio=" + ratio.setScale(2, RoundingMode.HALF_UP)
                             + " (reportedCurrency=" + reportedCurrency + ")"
-                            + " — correcting to USD EPS");
+                            + " — correcting EPS to USD, implied FX=" + impliedFx.setScale(6, RoundingMode.HALF_UP));
                     epsTTM = yieldEps;
+                    if (nonUsd) fxToUsd = impliedFx; // use for FCF, BVPS, dividend below
                 }
             }
         }
 
-        // FX rate for other per-share values (FCF, dividend, BVPS).
-        // Try FX endpoint; if unavailable just log and leave those fields unconverted
-        // (they affect Graham/BVPS models but not the primary DCF).
-        BigDecimal fxToUsd = BigDecimal.ONE;
-        boolean nonUsd = !"USD".equals(reportedCurrency);
-        if (nonUsd) {
+        // If FX not yet derived from EPS check (e.g. USD company or no mismatch),
+        // try the FMP FX endpoint as a fallback for non-USD companies.
+        if (nonUsd && fxToUsd.compareTo(BigDecimal.ONE) == 0) {
             BigDecimal rate = fetchFxToUsd(reportedCurrency);
             if (rate != null) fxToUsd = rate;
-            // If rate unavailable we still proceed — EPS was already corrected above.
         }
 
         // EPS growth — YoY from 2 most recent annual income statements
