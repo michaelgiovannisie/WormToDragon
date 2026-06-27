@@ -372,7 +372,7 @@ export default function Research() {
 
   return (
     <div style={{ color: C.text, fontFamily: C.font }}>
-      <p style={labelStyle}>Research</p>
+      <p style={{ ...labelStyle, fontSize: "15px" }}>Research</p>
       <h2 style={{ fontSize: "48px", marginTop: "12px", marginBottom: "4px" }}>
         Valuation Workspace
       </h2>
@@ -385,7 +385,7 @@ export default function Research() {
 
       {/* Search */}
       <section style={{ ...sectionStyle, marginBottom: "32px", position: "relative" }}>
-        <p style={labelStyle}>Asset Search</p>
+        <p style={{ ...labelStyle, fontSize: "15px" }}>Asset Search</p>
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -508,7 +508,7 @@ export default function Research() {
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
               <div>
-                <p style={labelStyle}>Price History</p>
+                <p style={{ ...labelStyle, fontSize: "15px" }}>Price History</p>
                 <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>
                   {symbol} — Historical Close Price
                   {avgCost && <span style={{ color: C.muted, fontSize: "14px", marginLeft: "16px" }}>
@@ -608,7 +608,7 @@ export default function Research() {
 
           {/* Financial Metrics */}
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-            <p style={labelStyle}>Financials</p>
+            <p style={{ ...labelStyle, fontSize: "15px" }}>Financials</p>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
               <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>
                 Key Metrics ({finPeriod === "annual" ? "Annual" : "Quarterly"})
@@ -731,7 +731,7 @@ export default function Research() {
                   <div style={{ display: "grid", gridTemplateColumns: growthData.length > 0 ? "1fr 1fr 1fr" : "1fr 1fr", gap: "32px" }}>
                     {/* Chart 1: DPS */}
                     <div>
-                      <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+                      <p style={{ color: C.muted, fontSize: "16px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
                         {isAnnual ? "Annual Dividend / Share" : "Quarterly Dividend / Share"}
                       </p>
                       <ResponsiveContainer width="100%" height={200}>
@@ -757,7 +757,7 @@ export default function Research() {
                     {/* Chart 2: YoY growth (annual only) */}
                     {isAnnual && growthData.length > 0 && (
                       <div>
-                        <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+                        <p style={{ color: C.muted, fontSize: "16px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
                           Dividend Growth YoY %
                         </p>
                         <ResponsiveContainer width="100%" height={200}>
@@ -784,7 +784,7 @@ export default function Research() {
                     {/* Chart 3: Payout ratio (annual only, needs EPS) */}
                     {isAnnual && epsVal && annualWithPayout.some((r: any) => r.payout != null) && (
                       <div>
-                        <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+                        <p style={{ color: C.muted, fontSize: "16px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
                           Payout Ratio % (Dividends / EPS)
                         </p>
                         <ResponsiveContainer width="100%" height={200}>
@@ -849,7 +849,7 @@ export default function Research() {
                     const colorFn = barColor(data, dataKey);
                     return (
                       <div>
-                        <p style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>{title}</p>
+                        <p style={{ color: C.muted, fontSize: "16px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>{title}</p>
                         <ResponsiveContainer width="100%" height={180}>
                           <BarChart data={data} barSize={20}>
                             <CartesianGrid stroke="rgba(200,169,106,0.06)" vertical={false} />
@@ -957,7 +957,7 @@ export default function Research() {
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <p style={labelStyle}>Intrinsic Value</p>
+                <p style={{ ...labelStyle, fontSize: "15px" }}>Intrinsic Value</p>
                 <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Valuation Range</h3>
               </div>
               <div />
@@ -966,32 +966,32 @@ export default function Research() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px", marginTop: "28px" }}>
               {[["Bear Case", bearCase], ["Base Case", baseCase], ["Bull Case", bullCase]].map(([label, sc]: any) => (
                 <div key={label} style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
-                  <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>{label}</p>
+                  <p style={{ color: C.muted, fontSize: "17px", margin: 0 }}>{label}</p>
                   {/* Primary DCF value */}
                   <div style={{ marginTop: "12px" }}>
-                    <p style={{ color: C.muted, fontSize: "11px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>{sc ? (MODEL_LABELS[sc.modelType as Model] ?? sc.modelType) : "—"}</p>
-                    <h4 style={{ fontSize: "28px", margin: "4px 0 0", color: sc ? C.text : C.muted }}>
+                    <p style={{ color: C.muted, fontSize: "15px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>{sc ? (MODEL_LABELS[sc.modelType as Model] ?? sc.modelType) : "—"}</p>
+                    <h4 style={{ fontSize: "32px", margin: "4px 0 0", color: sc ? C.text : C.muted }}>
                       {sc ? `$${Number(sc.intrinsicValue).toFixed(2)}` : "—"}
                     </h4>
                   </div>
                   {/* Cross-check exit multiple value */}
                   {sc?.exitMultipleValue != null && (
                     <div style={{ marginTop: "8px" }}>
-                      <p style={{ color: C.muted, fontSize: "11px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      <p style={{ color: C.muted, fontSize: "15px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         Cross-check ({sc.exitMultiple}x exit)
                       </p>
-                      <p style={{ fontSize: "18px", margin: "4px 0 0", color: C.muted }}>
+                      <p style={{ fontSize: "22px", margin: "4px 0 0", color: C.muted }}>
                         ${Number(sc.exitMultipleValue).toFixed(2)}
                       </p>
                     </div>
                   )}
-                  <p style={{ color: sc && Number(sc.marginOfSafetyPercent) >= 20 ? C.green : sc && Number(sc.marginOfSafetyPercent) >= 0 ? C.gold : C.red, marginTop: "10px", fontSize: "14px" }}>
+                  <p style={{ color: sc && Number(sc.marginOfSafetyPercent) >= 20 ? C.green : sc && Number(sc.marginOfSafetyPercent) >= 0 ? C.gold : C.red, marginTop: "10px", fontSize: "18px" }}>
                     {sc ? `MOS ${Number(sc.marginOfSafetyPercent).toFixed(1)}%` : ""}
                   </p>
-                  <p style={{ color: C.muted, marginTop: "8px", fontSize: "13px" }}>
+                  <p style={{ color: C.muted, marginTop: "8px", fontSize: "17px" }}>
                     {sc ? `Buy below $${(Number(sc.intrinsicValue) * (1 - targetMos / 100)).toFixed(2)}` : ""}
                   </p>
-                  <p style={{ color: C.muted, marginTop: "8px", fontSize: "12px" }}>
+                  <p style={{ color: C.muted, marginTop: "8px", fontSize: "16px" }}>
                     {sc ? `g=${sc.growthRatePercent}% · d=${sc.discountRatePercent}% · gT=${sc.terminalGrowthRatePercent ?? "—"}%` : ""}
                   </p>
                 </div>
@@ -1007,15 +1007,15 @@ export default function Research() {
                 <div style={{ marginTop: "20px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px",
                   display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "center" }}>
                   <div>
-                    <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>PEG Ratio (Peter Lynch)</p>
-                    <h3 style={{ fontSize: "42px", margin: "8px 0 4px", color: ratioColor }}>{ratio.toFixed(2)}</h3>
-                    <p style={{ color: ratioColor, fontSize: "13px", margin: 0 }}>{ratioLabel}</p>
+                    <p style={{ color: C.muted, fontSize: "15px", margin: 0 }}>PEG Ratio (Peter Lynch)</p>
+                    <h3 style={{ fontSize: "44px", margin: "8px 0 4px", color: ratioColor }}>{ratio.toFixed(2)}</h3>
+                    <p style={{ color: ratioColor, fontSize: "15px", margin: 0 }}>{ratioLabel}</p>
                   </div>
-                  <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
+                  <div style={{ fontSize: "15px", color: C.muted, lineHeight: "1.8" }}>
                     <p style={{ margin: 0 }}>P/E ÷ EPS Growth Rate</p>
                     <p style={{ margin: "4px 0 0" }}>P/E: {Number(pegScenario.earningsPerShare) !== 0 ? `${(Number(pegScenario.currentPrice) / Number(pegScenario.earningsPerShare)).toFixed(1)}x` : "—"}</p>
                     <p style={{ margin: "4px 0 0" }}>Growth: {pegScenario.growthRatePercent}%</p>
-                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>{"< 1 undervalued · 1–2 fair · > 2 overvalued"}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px" }}>{"< 1 undervalued · 1–2 fair · > 2 overvalued"}</p>
                   </div>
                 </div>
               );
@@ -1032,15 +1032,15 @@ export default function Research() {
                 <div style={{ marginTop: "20px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px",
                   display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "center" }}>
                   <div>
-                    <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>Graham Number</p>
-                    <h3 style={{ fontSize: "42px", margin: "8px 0 4px", color: C.text }}>${iv.toFixed(2)}</h3>
-                    <p style={{ color: mosColor, fontSize: "13px", margin: 0 }}>{mosLabel} · MOS {mos.toFixed(1)}%</p>
+                    <p style={{ color: C.muted, fontSize: "15px", margin: 0 }}>Graham Number</p>
+                    <h3 style={{ fontSize: "44px", margin: "8px 0 4px", color: C.text }}>${iv.toFixed(2)}</h3>
+                    <p style={{ color: mosColor, fontSize: "15px", margin: 0 }}>{mosLabel} · MOS {mos.toFixed(1)}%</p>
                   </div>
-                  <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
+                  <div style={{ fontSize: "15px", color: C.muted, lineHeight: "1.8" }}>
                     <p style={{ margin: 0 }}>√(22.5 × EPS × Book Value/Share)</p>
                     <p style={{ margin: "4px 0 0" }}>EPS: ${Number(grahamScenario.earningsPerShare).toFixed(2)}</p>
                     <p style={{ margin: "4px 0 0" }}>Current price: ${price.toFixed(2)}</p>
-                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>Best for asset-heavy companies</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px" }}>Best for asset-heavy companies</p>
                   </div>
                 </div>
               );
@@ -1057,15 +1057,15 @@ export default function Research() {
                 <div style={{ marginTop: "20px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px",
                   display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "center" }}>
                   <div>
-                    <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>DDM Intrinsic Value</p>
-                    <h3 style={{ fontSize: "42px", margin: "8px 0 4px", color: C.text }}>${iv.toFixed(2)}</h3>
-                    <p style={{ color: mosColor, fontSize: "13px", margin: 0 }}>{mosLabel} · MOS {mos.toFixed(1)}%</p>
+                    <p style={{ color: C.muted, fontSize: "15px", margin: 0 }}>DDM Intrinsic Value</p>
+                    <h3 style={{ fontSize: "44px", margin: "8px 0 4px", color: C.text }}>${iv.toFixed(2)}</h3>
+                    <p style={{ color: mosColor, fontSize: "15px", margin: 0 }}>{mosLabel} · MOS {mos.toFixed(1)}%</p>
                   </div>
-                  <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.8" }}>
+                  <div style={{ fontSize: "15px", color: C.muted, lineHeight: "1.8" }}>
                     <p style={{ margin: 0 }}>D₁ / (r − g)</p>
                     <p style={{ margin: "4px 0 0" }}>Dividend/Share (D₀): ${Number(ddmScenario.earningsPerShare).toFixed(2)}</p>
                     <p style={{ margin: "4px 0 0" }}>Growth: {ddmScenario.growthRatePercent}% · Discount: {ddmScenario.discountRatePercent}%</p>
-                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>Only reliable for dividend-paying stocks</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px" }}>Only reliable for dividend-paying stocks</p>
                   </div>
                 </div>
               );
@@ -1086,8 +1086,8 @@ export default function Research() {
               return (
                 <div style={{ marginTop: "28px", padding: "20px 24px", border: `1px solid ${C.borderSubtle}`, borderRadius: "18px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-                    <p style={{ color: C.muted, fontSize: "12px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Fair Value Range</p>
-                    <p style={{ color: markerColor, fontSize: "12px", margin: 0 }}>{rangeLabel}</p>
+                    <p style={{ color: C.muted, fontSize: "18px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Fair Value Range</p>
+                    <p style={{ color: markerColor, fontSize: "14px", margin: 0 }}>{rangeLabel}</p>
                   </div>
                   <div style={{ position: "relative", height: "8px", borderRadius: "4px", background: "rgba(200,169,106,0.15)" }}>
                     <div style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: "4px",
@@ -1098,11 +1098,11 @@ export default function Research() {
                       borderRadius: "50%", background: markerColor, border: `2px solid ${C.bg}` }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
-                    <span style={{ color: C.muted, fontSize: "12px" }}>${lo.toFixed(0)} bear</span>
-                    <span style={{ color: markerColor, fontSize: "13px", fontWeight: 600 }}>
+                    <span style={{ color: C.muted, fontSize: "14px" }}>${lo.toFixed(0)} bear</span>
+                    <span style={{ color: markerColor, fontSize: "15px", fontWeight: 600 }}>
                       ${cur.toFixed(2)} current
                     </span>
-                    <span style={{ color: C.muted, fontSize: "12px" }}>bull ${hi.toFixed(0)}</span>
+                    <span style={{ color: C.muted, fontSize: "14px" }}>bull ${hi.toFixed(0)}</span>
                   </div>
                 </div>
               );
@@ -1307,24 +1307,24 @@ export default function Research() {
               <section style={{ ...sectionStyle, marginBottom: "32px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px" }}>
                   <div>
-                    <p style={labelStyle}>DCA Intelligence</p>
+                    <p style={{ ...labelStyle, fontSize: "15px" }}>DCA Intelligence</p>
                     <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>Add to Position</h3>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <label style={{ color: C.muted, fontSize: "13px" }}>Available Cash ($)</label>
+                    <label style={{ color: C.muted, fontSize: "19px" }}>Available Cash ($)</label>
                     <input
                       type="number" value={dcaCash}
                       onChange={e => setDcaCash(e.target.value)}
                       onBlur={e => refreshDCA(e.target.value)}
                       style={{ width: "100px", background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
-                        borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
+                        borderRadius: "8px", padding: "6px 10px", fontFamily: C.font, fontSize: "19px" }} />
                   </div>
                 </div>
 
                 {dcaLoading
-                  ? <p style={{ color: C.gold, fontSize: "13px" }}>Loading recommendation…</p>
+                  ? <p style={{ color: C.gold, fontSize: "19px" }}>Loading recommendation…</p>
                   : !dcaRec
-                  ? <p style={{ color: C.muted }}>Run a valuation scenario first to unlock DCA recommendations.</p>
+                  ? <p style={{ color: C.muted, fontSize: "19px" }}>Run a valuation scenario first to unlock DCA recommendations.</p>
                   : <>
                       {/* ── Recommendation card ── */}
                       {(() => {
@@ -1335,22 +1335,22 @@ export default function Research() {
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
                               <div style={{ flex: 1 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
-                                  <span style={{ padding: "5px 18px", borderRadius: "999px", fontSize: "13px", fontWeight: 700,
+                                  <span style={{ padding: "6px 20px", borderRadius: "999px", fontSize: "21px", fontWeight: 700,
                                     background: rec.action === "BUY_MORE" ? "rgba(143,214,148,0.12)" : rec.action === "REDUCE" ? "rgba(224,108,117,0.12)" : "rgba(200,169,106,0.12)",
                                     color: actionColor }}>
                                     {rec.action.replaceAll("_", " ")}
                                   </span>
-                                  <span style={{ color: C.muted, fontSize: "13px" }}>{rec.confidenceScore}% confidence</span>
+                                  <span style={{ color: C.muted, fontSize: "21px" }}>{rec.confidenceScore}% confidence</span>
                                 </div>
                                 {rec.action === "BUY_MORE" && (
-                                  <p style={{ color: C.text, fontSize: "28px", fontWeight: 600, margin: "0 0 4px" }}>
+                                  <p style={{ color: C.text, fontSize: "32px", fontWeight: 600, margin: "0 0 4px" }}>
                                     ${Number(rec.suggestedAmount).toFixed(2)}
-                                    <span style={{ color: C.muted, fontSize: "15px", fontWeight: 400, marginLeft: "10px" }}>
+                                    <span style={{ color: C.muted, fontSize: "21px", fontWeight: 400, marginLeft: "10px" }}>
                                       ≈ {Number(rec.suggestedQuantity).toFixed(4)} shares
                                     </span>
                                   </p>
                                 )}
-                                <p style={{ color: C.muted, fontSize: "14px", lineHeight: "1.6", margin: "8px 0 0" }}>
+                                <p style={{ color: C.muted, fontSize: "21px", lineHeight: "1.6", margin: "8px 0 0" }}>
                                   {rec.rationale}
                                 </p>
                               </div>
@@ -1362,7 +1362,7 @@ export default function Research() {
                                     strokeDasharray={`${2 * Math.PI * 26 * rec.confidenceScore / 100} ${2 * Math.PI * 26}`}
                                     strokeLinecap="round" transform="rotate(-90 32 32)" />
                                 </svg>
-                                <p style={{ color: C.muted, fontSize: "11px", margin: "-4px 0 0" }}>{rec.confidenceScore}%</p>
+                                <p style={{ color: C.muted, fontSize: "17px", margin: "-4px 0 0" }}>{rec.confidenceScore}%</p>
                               </div>
                             </div>
                           </div>
@@ -1374,20 +1374,20 @@ export default function Research() {
 
                         {/* Average Down Calculator */}
                         <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
-                          <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          <p style={{ color: C.muted, fontSize: "20px", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                             Average Down Calculator
                           </p>
-                          <p style={{ color: C.text, fontSize: "13px", margin: "0 0 18px", lineHeight: "1.5" }}>
+                          <p style={{ color: C.text, fontSize: "19px", margin: "0 0 18px", lineHeight: "1.5" }}>
                             If you buy more now, what happens to your position?
                           </p>
 
                           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-                            <label style={{ color: C.muted, fontSize: "13px", whiteSpace: "nowrap" }}>Add ($)</label>
+                            <label style={{ color: C.muted, fontSize: "19px", whiteSpace: "nowrap" }}>Add ($)</label>
                             <input
                               type="number" value={dcaAddAmount}
                               onChange={e => setDcaAddAmount(e.target.value)}
                               style={{ flex: 1, background: C.bg, color: C.text, border: `1px solid rgba(200,169,106,0.35)`,
-                                borderRadius: "8px", padding: "6px 10px", fontFamily: C.font }} />
+                                borderRadius: "8px", padding: "6px 10px", fontFamily: C.font, fontSize: "19px" }} />
                           </div>
 
                           {qtyHeld > 0 ? (
@@ -1405,23 +1405,23 @@ export default function Research() {
                                   sub: `+$${addAmt.toFixed(2)} added`, color: C.muted },
                               ].map(item => (
                                 <div key={item.label} style={{ background: "rgba(200,169,106,0.04)", borderRadius: "12px", padding: "14px" }}>
-                                  <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{item.label}</p>
-                                  <p style={{ color: C.text, fontSize: "18px", fontWeight: 600, margin: "0 0 2px" }}>{item.val}</p>
-                                  <p style={{ color: item.color, fontSize: "11px", margin: 0 }}>{item.sub}</p>
+                                  <p style={{ color: C.muted, fontSize: "17px", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{item.label}</p>
+                                  <p style={{ color: C.text, fontSize: "24px", fontWeight: 600, margin: "0 0 2px" }}>{item.val}</p>
+                                  <p style={{ color: item.color, fontSize: "17px", margin: 0 }}>{item.sub}</p>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <p style={{ color: C.muted, fontSize: "13px" }}>No current position — avg-down calculator requires an existing holding.</p>
+                            <p style={{ color: C.muted, fontSize: "19px" }}>No current position — avg-down calculator requires an existing holding.</p>
                           )}
                         </div>
 
                         {/* Entry Price Targets */}
                         <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
-                          <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          <p style={{ color: C.muted, fontSize: "20px", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                             Entry Price Targets
                           </p>
-                          <p style={{ color: C.text, fontSize: "13px", margin: "0 0 18px", lineHeight: "1.5" }}>
+                          <p style={{ color: C.text, fontSize: "19px", margin: "0 0 18px", lineHeight: "1.5" }}>
                             What price achieves each margin of safety?
                           </p>
 
@@ -1429,8 +1429,8 @@ export default function Research() {
                             <>
                               <div style={{ marginBottom: "16px", padding: "12px 16px", background: "rgba(200,169,106,0.06)", borderRadius: "10px",
                                 display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ color: C.muted, fontSize: "13px" }}>Intrinsic Value</span>
-                                <span style={{ color: C.gold, fontSize: "13px", fontWeight: 600 }}>${intrinsicValue.toFixed(2)}</span>
+                                <span style={{ color: C.muted, fontSize: "19px" }}>Intrinsic Value</span>
+                                <span style={{ color: C.gold, fontSize: "19px", fontWeight: 600 }}>${intrinsicValue.toFixed(2)}</span>
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 {targets.map(t => {
@@ -1441,10 +1441,10 @@ export default function Research() {
                                       border: `1px solid ${isBelowCurrent ? "rgba(143,214,148,0.3)" : C.borderSubtle}`,
                                       background: isBelowCurrent ? "rgba(143,214,148,0.04)" : "transparent" }}>
                                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                                        <span style={{ color: C.muted, fontSize: "12px" }}>{t.mos}% MOS</span>
-                                        <span style={{ color: isBelowCurrent ? C.green : C.text, fontSize: "14px", fontWeight: 600 }}>
+                                        <span style={{ color: C.muted, fontSize: "18px" }}>{t.mos}% MOS</span>
+                                        <span style={{ color: isBelowCurrent ? C.green : C.text, fontSize: "20px", fontWeight: 600 }}>
                                           ${t.price.toFixed(2)}
-                                          {isBelowCurrent && <span style={{ color: C.green, fontSize: "11px", marginLeft: "6px" }}>✓ met</span>}
+                                          {isBelowCurrent && <span style={{ color: C.green, fontSize: "17px", marginLeft: "6px" }}>✓ met</span>}
                                         </span>
                                       </div>
                                       <div style={{ height: "3px", background: "rgba(200,169,106,0.1)", borderRadius: "2px" }}>
@@ -1456,7 +1456,7 @@ export default function Research() {
                                 })}
                               </div>
                               {currentPrice > 0 && (
-                                <p style={{ color: C.muted, fontSize: "12px", marginTop: "14px" }}>
+                                <p style={{ color: C.muted, fontSize: "18px", marginTop: "14px" }}>
                                   Current price: <span style={{ color: C.text }}>${currentPrice.toFixed(2)}</span>
                                   {intrinsicValue > currentPrice
                                     ? <span style={{ color: C.green }}> · {(((intrinsicValue - currentPrice) / intrinsicValue) * 100).toFixed(1)}% MOS</span>
@@ -1466,7 +1466,7 @@ export default function Research() {
                               )}
                             </>
                           ) : (
-                            <p style={{ color: C.muted, fontSize: "13px" }}>Run a valuation scenario to see entry price targets.</p>
+                            <p style={{ color: C.muted, fontSize: "19px" }}>Run a valuation scenario to see entry price targets.</p>
                           )}
                         </div>
                       </div>
@@ -1480,7 +1480,7 @@ export default function Research() {
           {/* Model Assumptions */}
           <section style={{ ...sectionStyle, marginBottom: "32px" }}>
             <div style={{ marginBottom: "24px" }}>
-              <p style={labelStyle}>Valuation Models</p>
+              <p style={{ ...labelStyle, fontSize: "15px" }}>Valuation Models</p>
               <h3 style={{ fontSize: "24px", margin: "8px 0 4px" }}>Assumptions & Inputs</h3>
               <p style={{ color: C.muted, fontSize: "13px", margin: 0 }}>
                 Latest scenario per model. ⚠️ flags inputs that differ from current synced data by more than 10%.
@@ -1591,7 +1591,7 @@ export default function Research() {
               <section style={{ ...sectionStyle, marginBottom: "32px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "20px" }}>
                   <div>
-                    <p style={labelStyle}>Asset Ledger</p>
+                    <p style={{ ...labelStyle, fontSize: "15px" }}>Asset Ledger</p>
                     <h3 style={{ fontSize: "24px", margin: "8px 0 0" }}>{symbol} Transactions</h3>
                   </div>
                   {/* Buy / All / Sell toggle */}
@@ -1693,7 +1693,7 @@ export default function Research() {
 
             return (
               <section style={{ ...sectionStyle, marginBottom: "32px" }}>
-                <p style={labelStyle}>Tax Lots</p>
+                <p style={{ ...labelStyle, fontSize: "15px" }}>Tax Lots</p>
                 <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Open & Closed Lots</h3>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
@@ -1738,7 +1738,7 @@ export default function Research() {
 
           {/* FIFO Allocations — hidden from UI, data kept in DB for gain calculations
           <section style={sectionStyle}>
-            <p style={labelStyle}>Realized Gain Audit</p>
+            <p style={{ ...labelStyle, fontSize: "15px" }}>Realized Gain Audit</p>
             <h3 style={{ fontSize: "24px", margin: "8px 0 24px" }}>Tax Lot Allocations</h3>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>

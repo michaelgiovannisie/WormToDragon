@@ -27,8 +27,8 @@ export default function Sidebar() {
       gap: "0",
     }}>
       <div style={{ marginBottom: "48px" }}>
-        <h1 style={{ color: C.gold, fontSize: "26px", margin: 0, letterSpacing: "0.04em" }}>
-          Conviction
+        <h1 style={{ color: C.gold, fontSize: "20px", margin: 0, letterSpacing: "0.04em", lineHeight: 1.3 }}>
+          Cacing Cacing Naga Naga
         </h1>
       </div>
 
@@ -45,7 +45,7 @@ export default function Sidebar() {
               color: isActive ? C.gold : C.muted,
               background: isActive ? "rgba(200,169,106,0.08)" : "transparent",
               textDecoration: "none",
-              fontSize: "15px",
+              fontSize: "19px",
               fontFamily: C.font,
               letterSpacing: "0.02em",
               transition: "all 0.15s",

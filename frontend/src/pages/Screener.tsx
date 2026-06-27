@@ -147,7 +147,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: "8px",
   color: C.text,
   fontFamily: C.font,
-  fontSize: "13px",
+  fontSize: "16px",
   padding: "6px 10px",
   outline: "none",
   width: "100%",
@@ -158,7 +158,7 @@ const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
 
 const groupLabel: React.CSSProperties = {
   color: C.gold,
-  fontSize: "11px",
+  fontSize: "14px",
   fontWeight: 600,
   letterSpacing: "0.1em",
   textTransform: "uppercase",
@@ -167,13 +167,13 @@ const groupLabel: React.CSSProperties = {
 
 const fieldLabel: React.CSSProperties = {
   color: C.muted,
-  fontSize: "12px",
+  fontSize: "14px",
   margin: "0 0 5px",
 };
 
 const thStyle: React.CSSProperties = {
   color: C.muted,
-  fontSize: "12px",
+  fontSize: "14px",
   fontWeight: 400,
   textAlign: "left",
   paddingBottom: "12px",
@@ -225,7 +225,7 @@ function FlagCheck({
         cursor: "pointer", padding: "6px 10px",
         border: `1px solid ${C.border}`, borderRadius: "8px",
         background: "rgba(255,255,255,0.04)", userSelect: "none",
-        fontSize: "13px",
+        fontSize: "15px",
       }}
     >
       <span style={{ color, fontWeight: 700, minWidth: "14px", textAlign: "center" }}>
@@ -403,7 +403,7 @@ export default function Screener() {
   const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter") runScreen(); };
 
   return (
-    <div style={{ maxWidth: "1400px" }}>
+    <div style={{ maxWidth: "1800px" }}>
 
       {/* Header */}
       <div style={{ marginBottom: "28px" }}>
@@ -417,7 +417,7 @@ export default function Screener() {
 
       {/* Filter panel */}
       <div style={{ ...sectionStyle, marginBottom: "24px" }}>
-        <p style={{ ...labelStyle, margin: "0 0 20px" }}>Filters</p>
+        <p style={{ ...labelStyle, fontSize: "15px", margin: "0 0 20px" }}>Filters</p>
 
         {/* ── Universe ── */}
         <p style={groupLabel}>Universe</p>
@@ -559,7 +559,7 @@ export default function Screener() {
         {/* ── Flags ── */}
         <p style={groupLabel}>
           Flags{" "}
-          <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "11px" }}>
+          <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "13px" }}>
             (click to toggle: — ignore, ✓ require, ✗ exclude)
           </span>
         </p>
@@ -573,7 +573,7 @@ export default function Screener() {
         {/* ── Quality Filters ── */}
         <p style={groupLabel}>
           Quality Filters{" "}
-          <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "11px" }}>
+          <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "13px" }}>
             (applied after enrichment — slower)
           </span>
         </p>
@@ -629,7 +629,7 @@ export default function Screener() {
               border: "none",
               borderRadius: "8px",
               fontFamily: C.font,
-              fontSize: "14px",
+              fontSize: "16px",
               fontWeight: 700,
               padding: "9px 28px",
               cursor: loading ? "not-allowed" : "pointer",
@@ -638,41 +638,41 @@ export default function Screener() {
           >
             {loading ? "Screening…" : "Screen"}
           </button>
-          {error && <span style={{ color: C.red, fontSize: "13px" }}>{error}</span>}
+          {error && <span style={{ color: C.red, fontSize: "15px" }}>{error}</span>}
         </div>
       </div>
 
       {/* Results */}
       <div style={sectionStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <p style={{ ...labelStyle, margin: 0 }}>Results</p>
+          <p style={{ ...labelStyle, fontSize: "15px", margin: 0 }}>Results</p>
           {hasRun && !loading && !error && (
-            <span style={{ color: C.muted, fontSize: "13px" }}>
+            <span style={{ color: C.muted, fontSize: "15px" }}>
               {results.length} {results.length === 1 ? "match" : "matches"}
             </span>
           )}
         </div>
 
         {loading && (
-          <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
+          <p style={{ color: C.muted, fontSize: "16px", textAlign: "center", padding: "40px 0" }}>
             Screening… fetching fundamentals for each result, may take ~10–20s
           </p>
         )}
 
         {!loading && !hasRun && (
-          <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
+          <p style={{ color: C.muted, fontSize: "16px", textAlign: "center", padding: "40px 0" }}>
             Set your filters above and click Screen
           </p>
         )}
 
         {!loading && hasRun && results.length === 0 && !error && (
-          <p style={{ color: C.muted, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
+          <p style={{ color: C.muted, fontSize: "16px", textAlign: "center", padding: "40px 0" }}>
             No results matched your filters
           </p>
         )}
 
         {!loading && hasRun && error && (
-          <p style={{ color: C.red, fontSize: "14px", textAlign: "center", padding: "40px 0" }}>
+          <p style={{ color: C.red, fontSize: "16px", textAlign: "center", padding: "40px 0" }}>
             Screen failed — check your filters and try again
           </p>
         )}
@@ -709,57 +709,57 @@ export default function Screener() {
                     onMouseEnter={e => (e.currentTarget.style.background = "rgba(200,169,106,0.04)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
-                    <td style={{ ...tableCellStyle, color: C.gold, fontWeight: 600 }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: C.gold, fontWeight: 600 }}>
                       {row.symbol}
                     </td>
-                    <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ ...tableCellStyle, color: C.muted, fontSize: "14px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {row.name ?? "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                    <td style={{ ...tableCellStyle, color: C.muted, fontSize: "14px" }}>
                       {row.sector ?? "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: C.muted, fontSize: "12px" }}>
+                    <td style={{ ...tableCellStyle, color: C.muted, fontSize: "14px" }}>
                       {row.exchange ?? "—"}
                     </td>
-                    <td style={tableCellStyle}>{fmtPrice(row.price)}</td>
-                    <td style={{ ...tableCellStyle, color: C.muted }}>{fmtCap(row.marketCap)}</td>
-                    <td style={{ ...tableCellStyle, color: row.beta != null ? (Math.abs(row.beta) <= 1 ? C.green : Math.abs(row.beta) <= 1.5 ? C.gold : C.red) : C.muted }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px" }}>{fmtPrice(row.price)}</td>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: C.muted }}>{fmtCap(row.marketCap)}</td>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: row.beta != null ? (Math.abs(row.beta) <= 1 ? C.green : Math.abs(row.beta) <= 1.5 ? C.gold : C.red) : C.muted }}>
                       {fmtNum(row.beta, 2)}
                     </td>
-                    <td style={{ ...tableCellStyle, color: peColor(row.peRatio) }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: peColor(row.peRatio) }}>
                       {row.peRatio != null ? fmtRatio(row.peRatio) : "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: row.pbRatio != null && row.pbRatio < 0 ? C.red : C.text }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: row.pbRatio != null && row.pbRatio < 0 ? C.red : C.text }}>
                       {row.pbRatio != null ? fmtRatio(row.pbRatio) : "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: roePctColor(row.roe) }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: roePctColor(row.roe) }}>
                       {fmtPct(row.roe)}
                     </td>
-                    <td style={{ ...tableCellStyle, color: row.netMargin != null && row.netMargin > 0 ? C.green : row.netMargin != null ? C.red : C.muted }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: row.netMargin != null && row.netMargin > 0 ? C.green : row.netMargin != null ? C.red : C.muted }}>
                       {fmtPct(row.netMargin)}
                     </td>
-                    <td style={{ ...tableCellStyle, color: row.dividendYield != null && row.dividendYield > 0 ? C.text : C.muted }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: row.dividendYield != null && row.dividendYield > 0 ? C.text : C.muted }}>
                       {row.dividendYield != null && row.dividendYield > 0 ? fmtPct(row.dividendYield) : "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: row.debtEquity != null ? (row.debtEquity < 0 ? C.red : row.debtEquity <= 1 ? C.green : row.debtEquity <= 2 ? C.gold : C.red) : C.muted }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: row.debtEquity != null ? (row.debtEquity < 0 ? C.red : row.debtEquity <= 1 ? C.green : row.debtEquity <= 2 ? C.gold : C.red) : C.muted }}>
                       {fmtNum(row.debtEquity, 2)}
                     </td>
-                    <td style={{ ...tableCellStyle, fontWeight: 600, color: piotroskiColor(row.piotroskiScore) }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", fontWeight: 600, color: piotroskiColor(row.piotroskiScore) }}>
                       {row.piotroskiScore != null ? `${row.piotroskiScore}/9` : "—"}
                     </td>
-                    <td style={{ ...tableCellStyle, color: altmanColor(row.altmanZScore) }}>
+                    <td style={{ ...tableCellStyle, fontSize: "16px", color: altmanColor(row.altmanZScore) }}>
                       {fmtNum(row.altmanZScore, 2)}
                     </td>
                     <td style={{ ...tableCellStyle, position: "relative" }} onClick={e => e.stopPropagation()}>
                       {addedTo[row.symbol] ? (
-                        <span style={{ color: C.green, fontSize: "12px" }}>✓ {addedTo[row.symbol]}</span>
+                        <span style={{ color: C.green, fontSize: "14px" }}>✓ {addedTo[row.symbol]}</span>
                       ) : (
                         <button
                           onClick={e => { e.stopPropagation(); setOpenDropdown(o => o === row.symbol ? null : row.symbol); }}
                           style={{
                             background: "rgba(200,169,106,0.12)", color: C.gold,
                             border: `1px solid rgba(200,169,106,0.3)`, borderRadius: "6px",
-                            padding: "3px 8px", fontSize: "12px", cursor: "pointer",
+                            padding: "3px 8px", fontSize: "14px", cursor: "pointer",
                             fontFamily: C.font,
                           }}
                         >＋</button>
@@ -780,7 +780,7 @@ export default function Screener() {
                               onClick={() => addToWatchlist(row.symbol, wl.id, wl.name)}
                               style={{
                                 padding: "8px 12px", borderRadius: "6px", cursor: "pointer",
-                                color: C.text, fontSize: "13px",
+                                color: C.text, fontSize: "15px",
                               }}
                               onMouseEnter={e => (e.currentTarget.style.background = "rgba(200,169,106,0.08)")}
                               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
@@ -795,7 +795,7 @@ export default function Screener() {
                           position: "absolute", top: "100%", right: 0, zIndex: 100,
                           background: "#1a2035", border: `1px solid ${C.border}`,
                           borderRadius: "8px", padding: "10px 14px", minWidth: "180px",
-                          color: C.muted, fontSize: "12px",
+                          color: C.muted, fontSize: "14px",
                           boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
                         }}>
                           No watchlists yet — create one on the Holdings page

@@ -1,0 +1,41 @@
+<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#141B30"/>
+      <stop offset="100%" stop-color="#0B1020"/>
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2C794"/>
+      <stop offset="50%" stop-color="#C8A96A"/>
+      <stop offset="100%" stop-color="#A9854A"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="600" height="600" fill="url(#bgGrad)"/>
+
+  <!-- Outer ring -->
+  <circle cx="300" cy="255" r="160" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" opacity="0.55"/>
+  <!-- Inner ring -->
+  <circle cx="300" cy="255" r="144" fill="none" stroke="#C8A96A" stroke-width="1" opacity="0.3"/>
+
+  <!-- Monogram: a "C" that resolves into an ascending arrow, symbolizing conviction + growth -->
+  <g>
+    <path d="M 360 175
+             A 95 95 0 1 0 360 335"
+          fill="none" stroke="url(#goldGrad)" stroke-width="16" stroke-linecap="round"/>
+    <!-- Ascending arrow piercing through the C, representing intrinsic-value growth -->
+    <path d="M 252 295 L 300 215 L 348 295"
+          fill="none" stroke="url(#goldGrad)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="300" y1="215" x2="300" y2="175" stroke="url(#goldGrad)" stroke-width="16" stroke-linecap="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="300" y="470" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-size="54"
+        letter-spacing="10" fill="#F5F1E8">CONVICTION</text>
+
+  <!-- Tagline -->
+  <text x="300" y="505" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-size="16"
+        letter-spacing="6" fill="#9C927D">INTRINSIC VALUE INVESTING</text>
+</svg>
