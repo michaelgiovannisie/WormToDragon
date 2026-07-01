@@ -23,6 +23,10 @@ public record AssetDetailResponse(
         BigDecimal bookValuePerShare,
         BigDecimal dividendPerShare,
         /** Latest closing price from historical_prices — present even when the asset is not held. */
-        BigDecimal latestPrice
+        BigDecimal latestPrice,
+        /** EQUITY, ETF, or CRYPTO */
+        String assetType,
+        /** Circulating supply — populated for CRYPTO assets only */
+        BigDecimal circulatingSupply
 ) {
 }

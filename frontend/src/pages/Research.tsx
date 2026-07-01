@@ -57,6 +57,7 @@ export default function Research() {
   });
   const [submitting, setSubmitting]     = useState(false);
   const [valuationError, setValuationError] = useState<string | null>(null);
+  const [cryptoSignals, setCryptoSignals]   = useState<any>(null);
   const [priceRange, setPriceRange]     = useState("1y");
   const searchTimeout                   = useRef<number | null>(null);
 
@@ -137,6 +138,14 @@ export default function Research() {
     fetch(`${API}/fmp/${symbol}/dividends`)
       .then(r => r.json()).then(d => setDividends(Array.isArray(d) ? d : [])).catch(console.error);
   }, [symbol]);
+
+  // Fetch crypto valuation signals once detail is loaded and asset is CRYPTO
+  useEffect(() => {
+    if (!symbol || !detail) { setCryptoSignals(null); return; }
+    if (detail.assetType !== "CRYPTO") { setCryptoSignals(null); return; }
+    fetch(`${API}/crypto-valuation/${symbol}`)
+      .then(r => r.json()).then(setCryptoSignals).catch(console.error);
+  }, [symbol, detail?.assetType]);
 
   const selectSymbol = async (s: string, inLibrary: boolean) => {
     setQuery("");
@@ -298,6 +307,7 @@ export default function Research() {
   };
 
   // Derived valuation data
+  const isCrypto       = detail?.assetType === "CRYPTO";
   const scenarios      = detail?.valuationScenarios ?? [];
   const bearCase       = scenarios.find((s: any) => s.caseType === "BEAR" && s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM");
   const baseCase       = scenarios.find((s: any) => s.caseType === "BASE" && s.modelType !== "PEG" && s.modelType !== "GRAHAM" && s.modelType !== "DDM");
@@ -953,8 +963,104 @@ export default function Research() {
             }
           </section>
 
+          {/* Crypto Valuation Signals — shown only for CRYPTO assets */}
+          {isCrypto && (
+            <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+              <p style={labelStyle}>On-Chain Valuation</p>
+              <h3 style={{ fontSize: "24px", margin: "8px 0 20px" }}>BTC Market Signals</h3>
+              {!cryptoSignals ? (
+                <p style={{ color: C.muted }}>Loading signals…</p>
+              ) : cryptoSignals.insufficientData ? (
+                <p style={{ color: C.muted }}>Not enough price history to compute signals. Sync historical prices first.</p>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "20px" }}>
+
+                  {/* Mayer Multiple */}
+                  {(() => {
+                    const v = Number(cryptoSignals.mayerMultiple);
+                    const signal = cryptoSignals.mayerSignal as string;
+                    const signalColor = signal === "UNDERVALUED" ? "#34d399"
+                      : signal === "FAIR"        ? C.gold
+                      : signal === "ELEVATED"    ? "#fb923c"
+                      : "#ef4444";
+                    return (
+                      <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Mayer Multiple</p>
+                        <p style={{ fontSize: "32px", fontWeight: 700, margin: "0 0 4px", color: signalColor }}>{v.toFixed(2)}×</p>
+                        <p style={{ color: signalColor, fontSize: "13px", fontWeight: 600, margin: "0 0 12px" }}>{signal.replace("_", " ")}</p>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: 0 }}>Current Price / 200-day MA</p>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: "4px 0 0" }}>
+                          200d MA: ${Number(cryptoSignals.ma200Day).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        </p>
+                        <p style={{ color: C.muted, fontSize: "11px", margin: "12px 0 0" }}>
+                          {"<0.8 Undervalued · 0.8–1.5 Fair · 1.5–2.4 Elevated · >2.4 Overvalued"}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 200-week MA */}
+                  {cryptoSignals.ma200Week && (() => {
+                    const ratio = Number(cryptoSignals.ma200WeekRatio);
+                    const signal = cryptoSignals.ma200WeekSignal as string;
+                    const signalColor = signal === "BELOW_MA"  ? "#34d399"
+                      : signal === "FAIR"     ? C.gold
+                      : signal === "ELEVATED" ? "#fb923c"
+                      : "#ef4444";
+                    return (
+                      <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>200-Week MA</p>
+                        <p style={{ fontSize: "32px", fontWeight: 700, margin: "0 0 4px", color: signalColor }}>
+                          ${Number(cryptoSignals.ma200Week).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        </p>
+                        <p style={{ color: signalColor, fontSize: "13px", fontWeight: 600, margin: "0 0 12px" }}>
+                          {signal === "BELOW_MA" ? "BELOW MA — HISTORICAL BUY ZONE" : signal.replace("_", " ")}
+                        </p>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: 0 }}>
+                          Price / 200-week MA: {ratio.toFixed(2)}×
+                        </p>
+                        <p style={{ color: C.muted, fontSize: "11px", margin: "12px 0 0" }}>
+                          {"<1× Below (buy zone) · 1–2× Fair · 2–3.5× Elevated · >3.5× Overvalued"}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Stock-to-Flow */}
+                  {cryptoSignals.s2fModelPrice && (() => {
+                    const modelPrice = Number(cryptoSignals.s2fModelPrice);
+                    const ratio = Number(cryptoSignals.s2fRatio);
+                    const signal = cryptoSignals.s2fSignal as string;
+                    const signalColor = signal === "BELOW_MODEL"    ? "#34d399"
+                      : signal === "NEAR_MODEL"     ? C.gold
+                      : signal === "ABOVE_MODEL"    ? "#fb923c"
+                      : "#ef4444";
+                    return (
+                      <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Stock-to-Flow Model</p>
+                        <p style={{ fontSize: "32px", fontWeight: 700, margin: "0 0 4px", color: signalColor }}>
+                          ${modelPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        </p>
+                        <p style={{ color: signalColor, fontSize: "13px", fontWeight: 600, margin: "0 0 12px" }}>
+                          {signal.replace(/_/g, " ")} · {ratio.toFixed(2)}× model
+                        </p>
+                        <p style={{ color: C.muted, fontSize: "12px", margin: 0 }}>
+                          S2F ratio: {Number(cryptoSignals.s2f).toFixed(1)}
+                        </p>
+                        <p style={{ color: C.muted, fontSize: "11px", margin: "12px 0 0" }}>
+                          PlanB S2F model price based on circulating supply & block reward. BTC only.
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Valuation Range */}
-          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+          {!isCrypto && <section style={{ ...sectionStyle, marginBottom: "32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <p style={labelStyle}>Intrinsic Value</p>
@@ -1267,7 +1373,7 @@ export default function Research() {
                 </div>
               )}
             </div>
-          </section>
+          </section>}
 
           {/* DCA Intelligence */}
           {(() => {
@@ -1477,8 +1583,8 @@ export default function Research() {
           })()}
 
 
-          {/* Model Assumptions */}
-          <section style={{ ...sectionStyle, marginBottom: "32px" }}>
+          {/* Model Assumptions — hidden for crypto */}
+          {!isCrypto && <section style={{ ...sectionStyle, marginBottom: "32px" }}>
             <div style={{ marginBottom: "24px" }}>
               <p style={labelStyle}>Valuation Models</p>
               <h3 style={{ fontSize: "24px", margin: "8px 0 4px" }}>Assumptions & Inputs</h3>
@@ -1567,7 +1673,7 @@ export default function Research() {
                   </table>
                 </div>
             }
-          </section>
+          </section>}
 
           {/* Asset Ledger */}
           {(() => {

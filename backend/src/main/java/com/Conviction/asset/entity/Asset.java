@@ -1,5 +1,6 @@
 package com.conviction.asset.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -53,6 +54,14 @@ public class Asset {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    /** 50-day price moving average — sourced from FMP quote response. */
+    @Column(precision = 19, scale = 4)
+    private BigDecimal priceAvg50;
+
+    /** 200-day price moving average — sourced from FMP quote response. */
+    @Column(precision = 19, scale = 4)
+    private BigDecimal priceAvg200;
 
     @Transient
     public String getAssetType() {

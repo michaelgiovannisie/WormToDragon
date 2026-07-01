@@ -69,9 +69,14 @@ public class FMPKeyMetricsSync {
         // Fetch current quote price — stable API uses query param, not path segment.
         // Price is always in USD for US-listed ADRs.
         BigDecimal quotePrice = null;
+        BigDecimal priceAvg50 = null;
+        BigDecimal priceAvg200 = null;
         List<Map<String, Object>> quoteResult = fmp.get("/quote", List.class, "symbol", symbol);
         if (quoteResult != null && !quoteResult.isEmpty()) {
-            quotePrice = toBD(quoteResult.get(0).get("price"));
+            Map<String, Object> q = quoteResult.get(0);
+            quotePrice  = toBD(q.get("price"));
+            priceAvg50  = toBD(q.get("priceAvg50"));
+            priceAvg200 = toBD(q.get("priceAvg200"));
         }
 
         // Currency sanity check using earningsYieldTTM.
@@ -206,14 +211,20 @@ public class FMPKeyMetricsSync {
         }
 
         Asset asset = assetRepository.findBySymbol(symbol.toUpperCase()).orElse(null);
-        if (asset instanceof Equity eq) {
-            if (epsTTM               != null) eq.setEps(epsTTM);
-            if (peRatioTTM           != null) eq.setPeRatio(peRatioTTM);
-            if (fcfPerShareTTM       != null) eq.setFreeCashFlowPerShare(fcfPerShareTTM);
-            if (epsGrowth            != null) eq.setEpsGrowth(epsGrowth);
-            if (bookValuePerShareTTM != null) eq.setBookValuePerShare(bookValuePerShareTTM);
-            if (dividendPerShareTTM  != null) eq.setDividendPerShare(dividendPerShareTTM);
-            assetRepository.save(eq);
+        if (asset != null) {
+            // priceAvg50/200 apply to all asset types — store on base entity
+            if (priceAvg50  != null) asset.setPriceAvg50(priceAvg50);
+            if (priceAvg200 != null) asset.setPriceAvg200(priceAvg200);
+
+            if (asset instanceof Equity eq) {
+                if (epsTTM               != null) eq.setEps(epsTTM);
+                if (peRatioTTM           != null) eq.setPeRatio(peRatioTTM);
+                if (fcfPerShareTTM       != null) eq.setFreeCashFlowPerShare(fcfPerShareTTM);
+                if (epsGrowth            != null) eq.setEpsGrowth(epsGrowth);
+                if (bookValuePerShareTTM != null) eq.setBookValuePerShare(bookValuePerShareTTM);
+                if (dividendPerShareTTM  != null) eq.setDividendPerShare(dividendPerShareTTM);
+            }
+            assetRepository.save(asset);
         }
 
         return new FMPKeyMetricsResponse(symbol, epsTTM, peRatioTTM, epsGrowth, fcfPerShareTTM, bookValuePerShareTTM, dividendPerShareTTM);

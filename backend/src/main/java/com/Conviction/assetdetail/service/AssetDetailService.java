@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.conviction.asset.entity.Crypto;
 import com.conviction.asset.entity.Equity;
 import com.conviction.asset.repository.AssetRepository;
 import com.conviction.assetdetail.dto.AssetDetailResponse;
@@ -66,12 +67,17 @@ public class AssetDetailService {
         String assetName = asset.map(a -> a.getName() != null ? a.getName() : symbol).orElse(symbol);
 
         BigDecimal eps = null, fcfPerShare = null, epsGrowth = null, bookValuePerShare = null, dividendPerShare = null;
+        BigDecimal circulatingSupply = null;
+        String assetType = asset.map(a -> a.getAssetType()).orElse(null);
         if (asset.isPresent() && asset.get() instanceof Equity eq) {
             eps              = eq.getEps();
             fcfPerShare      = eq.getFreeCashFlowPerShare();
             epsGrowth        = eq.getEpsGrowth();
             bookValuePerShare = eq.getBookValuePerShare();
             dividendPerShare  = eq.getDividendPerShare();
+        }
+        if (asset.isPresent() && asset.get() instanceof Crypto c) {
+            circulatingSupply = c.getCirculatingSupply();
         }
 
         List<ValuationScenario> scenarios =
@@ -131,7 +137,9 @@ public class AssetDetailService {
                 epsGrowth,
                 bookValuePerShare,
                 dividendPerShare,
-                latestPrice
+                latestPrice,
+                assetType,
+                circulatingSupply
         );
     }
 
