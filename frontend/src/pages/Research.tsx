@@ -139,12 +139,20 @@ export default function Research() {
       .then(r => r.json()).then(d => setDividends(Array.isArray(d) ? d : [])).catch(console.error);
   }, [symbol]);
 
+  const [s2fBlockReward, setS2fBlockReward] = useState("3.125");
+
+  const fetchCryptoSignals = (blockReward?: string) => {
+    if (!symbol) return;
+    const param = blockReward && blockReward !== "" ? `?blockReward=${blockReward}` : "";
+    fetch(`${API}/crypto-valuation/${symbol}${param}`)
+      .then(r => r.json()).then(setCryptoSignals).catch(console.error);
+  };
+
   // Fetch crypto valuation signals once detail is loaded and asset is CRYPTO
   useEffect(() => {
     if (!symbol || !detail) { setCryptoSignals(null); return; }
     if (detail.assetType !== "CRYPTO") { setCryptoSignals(null); return; }
-    fetch(`${API}/crypto-valuation/${symbol}`)
-      .then(r => r.json()).then(setCryptoSignals).catch(console.error);
+    fetchCryptoSignals(s2fBlockReward);
   }, [symbol, detail?.assetType]);
 
   const selectSymbol = async (s: string, inLibrary: boolean) => {
@@ -1035,6 +1043,11 @@ export default function Research() {
                       : signal === "NEAR_MODEL"     ? C.gold
                       : signal === "ABOVE_MODEL"    ? "#fb923c"
                       : "#ef4444";
+                    const HALVINGS = [
+                      { label: "Now",  reward: "3.125",   note: "Post-2024 halving" },
+                      { label: "2028", reward: "1.5625",  note: "5th halving" },
+                      { label: "2032", reward: "0.78125", note: "6th halving" },
+                    ];
                     return (
                       <div style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: "18px", padding: "24px" }}>
                         <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Stock-to-Flow Model</p>
@@ -1044,12 +1057,46 @@ export default function Research() {
                         <p style={{ color: signalColor, fontSize: "13px", fontWeight: 600, margin: "0 0 12px" }}>
                           {signal.replace(/_/g, " ")} · {ratio.toFixed(2)}× model
                         </p>
-                        <p style={{ color: C.muted, fontSize: "12px", margin: 0 }}>
-                          S2F ratio: {Number(cryptoSignals.s2f).toFixed(1)}
+                        <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 16px" }}>
+                          S2F: {Number(cryptoSignals.s2f).toFixed(1)} · Block reward: {cryptoSignals.blockReward} BTC
                         </p>
-                        <p style={{ color: C.muted, fontSize: "11px", margin: "12px 0 0" }}>
-                          PlanB S2F model price based on circulating supply & block reward. BTC only.
-                        </p>
+
+                        {/* Halving scenario selector */}
+                        <div style={{ borderTop: `1px solid ${C.borderSubtle}`, paddingTop: "14px" }}>
+                          <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Model Halving Scenario</p>
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+                            {HALVINGS.map(h => (
+                              <button key={h.reward} onClick={() => {
+                                setS2fBlockReward(h.reward);
+                                fetchCryptoSignals(h.reward);
+                              }}
+                                style={{
+                                  padding: "5px 12px", borderRadius: "8px", fontSize: "12px", cursor: "pointer",
+                                  fontFamily: C.font,
+                                  background: s2fBlockReward === h.reward ? "rgba(200,169,106,0.15)" : "transparent",
+                                  color: s2fBlockReward === h.reward ? C.gold : C.muted,
+                                  border: `1px solid ${s2fBlockReward === h.reward ? "rgba(200,169,106,0.4)" : C.borderSubtle}`,
+                                }}>
+                                {h.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ color: C.muted, fontSize: "12px" }}>Custom:</span>
+                            <input
+                              type="number" step="0.001" min="0.001"
+                              value={s2fBlockReward}
+                              onChange={e => setS2fBlockReward(e.target.value)}
+                              onBlur={e => { if (e.target.value) fetchCryptoSignals(e.target.value); }}
+                              style={{
+                                width: "90px", background: "rgba(255,255,255,0.05)", border: `1px solid ${C.borderSubtle}`,
+                                borderRadius: "8px", padding: "5px 10px", color: C.text, fontSize: "12px",
+                                fontFamily: C.font,
+                              }}
+                            />
+                            <span style={{ color: C.muted, fontSize: "12px" }}>BTC/block</span>
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}

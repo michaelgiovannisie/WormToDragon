@@ -21,6 +21,7 @@ public record CryptoValuationResponse(
         BigDecimal s2fModelPrice,
         BigDecimal s2fRatio,         // currentPrice / s2fModelPrice
         String s2fSignal,
+        Double blockReward,          // the block reward used (default or user override)
 
         // true when there isn't enough price history to compute signals
         boolean insufficientData

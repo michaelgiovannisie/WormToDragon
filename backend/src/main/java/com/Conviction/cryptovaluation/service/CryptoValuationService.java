@@ -38,7 +38,7 @@ public class CryptoValuationService {
         this.assetRepo = assetRepo;
     }
 
-    public CryptoValuationResponse calculate(String symbol) {
+    public CryptoValuationResponse calculate(String symbol, Double blockRewardOverride) {
         String sym   = symbol.toUpperCase();
         Asset  asset = assetRepo.findBySymbol(sym).orElse(null);
 
@@ -74,15 +74,18 @@ public class CryptoValuationService {
         // ---- Stock-to-Flow (BTC only) ----
         BigDecimal s2f = null, s2fModelPrice = null, s2fRatio = null;
         String s2fSignal = null;
+        double usedBlockReward = BTC_BLOCK_REWARD_2024;
         if (isBitcoin(sym) && asset instanceof Crypto c) {
             BigDecimal circulatingSupply = c.getCirculatingSupply();
             if (circulatingSupply != null && circulatingSupply.compareTo(BigDecimal.ZERO) > 0) {
-                double annualFlow    = BTC_BLOCKS_PER_YEAR * BTC_BLOCK_REWARD_2024;
-                double s2fDouble     = circulatingSupply.doubleValue() / annualFlow;
-                s2f                  = BigDecimal.valueOf(s2fDouble).setScale(2, RoundingMode.HALF_UP);
+                usedBlockReward   = (blockRewardOverride != null && blockRewardOverride > 0)
+                                    ? blockRewardOverride : BTC_BLOCK_REWARD_2024;
+                double annualFlow = BTC_BLOCKS_PER_YEAR * usedBlockReward;
+                double s2fDouble  = circulatingSupply.doubleValue() / annualFlow;
+                s2f               = BigDecimal.valueOf(s2fDouble).setScale(2, RoundingMode.HALF_UP);
 
                 // PlanB model: market_cap = e^A × S2F^B  (USD)
-                double modelMarketCap  = Math.exp(S2F_A) * Math.pow(s2fDouble, S2F_B);
+                double modelMarketCap   = Math.exp(S2F_A) * Math.pow(s2fDouble, S2F_B);
                 double modelPriceDouble = modelMarketCap / circulatingSupply.doubleValue();
                 s2fModelPrice = BigDecimal.valueOf(modelPriceDouble).setScale(2, RoundingMode.HALF_UP);
                 s2fRatio      = currentPrice.divide(s2fModelPrice, SCALE, RoundingMode.HALF_UP);
@@ -103,6 +106,7 @@ public class CryptoValuationService {
                 s2fModelPrice,
                 s2fRatio,
                 s2fSignal,
+                s2f != null ? usedBlockReward : null,
                 false
         );
     }
@@ -127,7 +131,7 @@ public class CryptoValuationService {
                 symbol, null, null, null, null,
                 null, null, null,
                 null, null, null, null,
-                true
+                null, true
         );
     }
 
