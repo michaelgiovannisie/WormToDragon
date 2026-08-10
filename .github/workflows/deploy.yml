@@ -1,0 +1,63 @@
+name: Deploy Conviction
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build backend
+        run: |
+          cd backend
+          ./mvnw clean package -DskipTests
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        env:
+          VITE_API_URL: https://conviction.michaelsie.com/api
+        run: |
+          cd frontend
+          npm ci
+          npx vite build
+
+      - name: Deploy to EC2
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "$SSH_KEY" > /tmp/conviction-key.pem
+          chmod 400 /tmp/conviction-key.pem
+
+          # Deploy backend JAR
+          scp -o StrictHostKeyChecking=no -i /tmp/conviction-key.pem \
+            backend/target/conviction-0.0.1-SNAPSHOT.jar \
+            ubuntu@$EC2_HOST:/opt/conviction/conviction.jar
+
+          # Deploy frontend
+          rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no -i /tmp/conviction-key.pem" \
+            frontend/dist/ \
+            ubuntu@$EC2_HOST:/opt/conviction/frontend/
+
+          # Restart services
+          ssh -o StrictHostKeyChecking=no -i /tmp/conviction-key.pem ubuntu@$EC2_HOST \
+            "sudo systemctl restart conviction && sudo systemctl reload nginx"
+
+          rm /tmp/conviction-key.pem
