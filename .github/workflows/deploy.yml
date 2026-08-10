@@ -12,9 +12,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > /tmp/conviction-key.pem
+          chmod 400 /tmp/conviction-key.pem
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -49,15 +49,17 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           # Deploy backend JAR
-          scp -o StrictHostKeyChecking=no \
+          scp -o StrictHostKeyChecking=no -i /tmp/conviction-key.pem \
             backend/target/Conviction-0.0.1-SNAPSHOT.jar \
             ubuntu@$EC2_HOST:/opt/conviction/conviction.jar
 
           # Deploy frontend
-          rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+          rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no -i /tmp/conviction-key.pem" \
             frontend/dist/ \
             ubuntu@$EC2_HOST:/opt/conviction/frontend/
 
           # Restart services
-          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST \
+          ssh -o StrictHostKeyChecking=no -i /tmp/conviction-key.pem ubuntu@$EC2_HOST \
             "sudo systemctl restart conviction && sudo systemctl reload nginx"
+
+          rm /tmp/conviction-key.pem
